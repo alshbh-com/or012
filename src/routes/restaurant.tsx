@@ -277,6 +277,7 @@ function OrdersByStatus({ orders, driverInfo, setChatTarget }: { orders: Order[]
       <TabsContent value="failed" className="mt-4">{renderTable(groups.failed, false)}</TabsContent>
     </Tabs>
   );
+}
 
 function ProductsTab({ restaurantId, products, reload }: { restaurantId: string; products: Product[]; reload: () => void }) {
   const [name, setName] = useState("");
