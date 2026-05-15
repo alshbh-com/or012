@@ -195,6 +195,89 @@ function Body() {
   );
 }
 
+type DriverInfoMap = Record<string, { name: string; phone: string | null; user_id: string }>;
+
+function OrdersByStatus({ orders, driverInfo, setChatTarget }: { orders: Order[]; driverInfo: DriverInfoMap; setChatTarget: (id: string) => void }) {
+  const groups = {
+    active: orders.filter((o) => statusGroup(o.status) === "active"),
+    done: orders.filter((o) => statusGroup(o.status) === "done"),
+    failed: orders.filter((o) => statusGroup(o.status) === "failed"),
+  };
+  const confirmPreparing = async (id: string) => {
+    const { error } = await supabase.from("orders").update({ status: "preparing" } as never).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("تم تأكيد التحضير");
+  };
+  const renderTable = (list: Order[], showPreparingBtn: boolean) => (
+    <Card className="p-5 overflow-x-auto shadow-soft">
+      <Table>
+        <TableHeader><TableRow>
+          <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>العنوان</TableHead>
+          <TableHead>المندوب</TableHead><TableHead>الإجمالي</TableHead><TableHead>الحالة</TableHead>
+          {showPreparingBtn && <TableHead>إجراء</TableHead>}
+        </TableRow></TableHeader>
+        <TableBody>
+          {list.map((o) => {
+            const info = o.driver_id ? driverInfo[o.driver_id] : null;
+            const canConfirm = showPreparingBtn && (o.status === "pending" || o.status === "accepted");
+            return (
+              <TableRow key={o.id}>
+                <TableCell><span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-gradient-primary px-2 text-sm font-bold text-primary-foreground shadow-soft">{o.daily_number ?? "—"}</span></TableCell>
+                <TableCell>
+                  <div className="font-medium">{o.customer_name}</div>
+                  <div className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</div>
+                </TableCell>
+                <TableCell className="max-w-[220px] truncate">{o.customer_address}</TableCell>
+                <TableCell>
+                  {info ? (
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium">{info.name}</div>
+                      <div className="flex gap-1">
+                        {info.phone && (
+                          <Button asChild size="sm" variant="outline" className="h-7 px-2 text-xs">
+                            <a href={`tel:${info.phone}`}>اتصال</a>
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                          onClick={() => setChatTarget(info.user_id)}>
+                          رسالة
+                        </Button>
+                      </div>
+                    </div>
+                  ) : <span className="text-xs text-muted-foreground">— لم يُعيَّن</span>}
+                </TableCell>
+                <TableCell className="font-semibold">{Number(o.total).toFixed(2)}</TableCell>
+                <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
+                {showPreparingBtn && (
+                  <TableCell>
+                    {canConfirm ? (
+                      <Button size="sm" className="bg-gradient-primary shadow-pop h-8" onClick={() => confirmPreparing(o.id)}>
+                        تأكيد قيد التحضير
+                      </Button>
+                    ) : <span className="text-xs text-muted-foreground">—</span>}
+                  </TableCell>
+                )}
+              </TableRow>
+            );
+          })}
+          {list.length === 0 && <TableRow><TableCell colSpan={showPreparingBtn ? 7 : 6} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
+        </TableBody>
+      </Table>
+    </Card>
+  );
+  return (
+    <Tabs defaultValue="active">
+      <TabsList className="bg-card p-1 shadow-soft rounded-xl">
+        <TabsTrigger value="active">نشطة ({groups.active.length})</TabsTrigger>
+        <TabsTrigger value="done">مكتملة ({groups.done.length})</TabsTrigger>
+        <TabsTrigger value="failed">ملغاة/مرتجعة ({groups.failed.length})</TabsTrigger>
+      </TabsList>
+      <TabsContent value="active" className="mt-4">{renderTable(groups.active, true)}</TabsContent>
+      <TabsContent value="done" className="mt-4">{renderTable(groups.done, false)}</TabsContent>
+      <TabsContent value="failed" className="mt-4">{renderTable(groups.failed, false)}</TabsContent>
+    </Tabs>
+  );
+
 function ProductsTab({ restaurantId, products, reload }: { restaurantId: string; products: Product[]; reload: () => void }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
