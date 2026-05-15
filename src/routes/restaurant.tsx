@@ -139,7 +139,7 @@ function Body() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button size="lg" className="bg-white text-primary hover:bg-white/90 shadow-pop"><Plus className="ml-2 h-5 w-5" />طلب جديد</Button></DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>إنشاء طلب جديد</DialogTitle></DialogHeader>
             <NewOrderForm restaurantId={restaurantId} cities={cities} products={products} onDone={() => { setOpen(false); loadOrders(restaurantId); }} />
           </DialogContent>
