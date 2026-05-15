@@ -1,5 +1,5 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout, type NavItem } from "@/components/dashboard-layout";
@@ -9,9 +9,9 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { LayoutDashboard, MapPin, Phone, Truck, Map as MapIcon, MessagesSquare, AlertTriangle } from "lucide-react";
+import { LayoutDashboard, MapPin, Phone, Truck, Map as MapIcon, MessagesSquare, AlertTriangle, Store } from "lucide-react";
 import { toast } from "sonner";
-import { STATUS_AR, STATUS_COLORS } from "@/lib/i18n";
+import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
 import { ChatPanel } from "@/components/chat-panel";
 import { ComplaintsList } from "@/components/complaints";
 import { DriversMap, type MapDriver } from "@/components/drivers-map";
@@ -24,8 +24,9 @@ export const Route = createFileRoute("/driver")({
 const navItems: NavItem[] = [{ to: "/driver", label: "طلباتي", icon: LayoutDashboard }];
 
 const NEXT_STATUS: Record<string, string[]> = {
-  accepted: ["preparing", "picked_up", "cancelled"],
-  preparing: ["picked_up", "cancelled"],
+  pending: ["preparing", "picked_up"],
+  accepted: ["preparing", "picked_up"],
+  preparing: ["picked_up"],
   picked_up: ["on_the_way"],
   on_the_way: ["delivered", "returned"],
 };
@@ -33,8 +34,9 @@ const NEXT_STATUS: Record<string, string[]> = {
 interface Order {
   id: string; order_number: string; daily_number: number | null; customer_name: string; customer_phone: string;
   customer_address: string; items_total: number; delivery_price: number; total: number;
-  status: string; created_at: string; notes: string | null;
+  status: string; created_at: string; notes: string | null; restaurant_id: string;
 }
+interface RestaurantInfo { id: string; name: string; address: string | null; phone: string | null }
 
 function DriverPage() {
   const { user, loading, roles } = useAuth();
@@ -53,6 +55,7 @@ function Body() {
   const [driverId, setDriverId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [restaurants, setRestaurants] = useState<Record<string, RestaurantInfo>>({});
   const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
   const [knownIds] = useState(new Set<string>());
 
@@ -71,6 +74,15 @@ function Body() {
     }
     data.forEach((o) => knownIds.add(o.id));
     setOrders(data as Order[]);
+
+    // Fetch restaurants info
+    const restIds = Array.from(new Set(data.map((o) => o.restaurant_id))).filter(Boolean);
+    if (restIds.length) {
+      const { data: rs } = await supabase.from("restaurants").select("id, name, address, phone").in("id", restIds);
+      const map: Record<string, RestaurantInfo> = {};
+      (rs ?? []).forEach((r) => { map[r.id as string] = r as RestaurantInfo; });
+      setRestaurants(map);
+    }
   };
 
   useEffect(() => {
@@ -94,7 +106,6 @@ function Body() {
     return () => { ch.unsubscribe(); };
   }, [driverId]);
 
-  // Live location push + local state for map
   useEffect(() => {
     if (!driverId || !isOnline) return;
     if (!("geolocation" in navigator)) return;
@@ -128,16 +139,16 @@ function Body() {
     toast.success(`تم التحديث: ${STATUS_AR[status] ?? status}`);
   };
 
-  const rejectOrder = async (id: string) => {
-    const { error } = await supabase.from("orders").update({ status: "pending", driver_id: null } as never).eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.warning("تم رفض الطلب وإعادته للأدمن");
-  };
+  const grouped = useMemo(() => ({
+    active: orders.filter((o) => statusGroup(o.status) === "active"),
+    done: orders.filter((o) => statusGroup(o.status) === "done"),
+    failed: orders.filter((o) => statusGroup(o.status) === "failed"),
+  }), [orders]);
 
   const totals = {
-    active: orders.filter((o) => !["delivered","cancelled","returned"].includes(o.status)).length,
-    delivered: orders.filter((o) => o.status === "delivered").length,
-    earnings: orders.filter((o) => o.status === "delivered").reduce((s, o) => s + Number(o.delivery_price), 0),
+    active: grouped.active.length,
+    delivered: grouped.done.length,
+    earnings: grouped.done.reduce((s, o) => s + Number(o.delivery_price), 0),
   };
 
   if (!driverId) {
@@ -145,18 +156,102 @@ function Body() {
   }
 
   const mapDrivers: MapDriver[] = myPos
-    ? [{ id: driverId, lat: myPos.lat, lng: myPos.lng, label: "موقعي الحالي", online: isOnline }]
+    ? [{ id: driverId, lat: myPos.lat, lng: myPos.lng, label: "موقعي الحالي", online: isOnline, hasOrders: totals.active > 0, activeCount: totals.active }]
     : [];
+
+  const renderOrders = (list: Order[]) => (
+    <div className="grid gap-4 md:grid-cols-2">
+      {list.map((o) => {
+        const next = NEXT_STATUS[o.status] ?? [];
+        const r = restaurants[o.restaurant_id];
+        const restMaps = r?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.address)}` : null;
+        const custMaps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customer_address)}`;
+        return (
+          <Card key={o.id} className="p-5 shadow-soft neon-border">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-primary text-base font-extrabold text-primary-foreground shadow-pop">{o.daily_number ?? "—"}</span>
+                <div>
+                  <div className="font-mono text-[10px] text-muted-foreground" dir="ltr">{o.order_number}</div>
+                </div>
+              </div>
+              <Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge>
+            </div>
+
+            {/* Restaurant section */}
+            <div className="mt-3 rounded-lg bg-accent/10 border border-accent/30 p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <Store className="h-4 w-4 text-accent" />
+                <span className="font-bold neon-text-accent">{r?.name ?? "المطعم"}</span>
+              </div>
+              {r?.address && (
+                <a href={restMaps!} target="_blank" rel="noreferrer" className="flex items-start gap-2 text-sm text-accent hover:underline">
+                  <MapPin className="h-4 w-4 mt-0.5" /><span>{r.address}</span>
+                </a>
+              )}
+              {r?.phone && (
+                <Button asChild size="sm" variant="outline" className="h-7">
+                  <a href={`tel:${r.phone}`} dir="ltr"><Phone className="ml-1 h-3 w-3" />اتصال بالمطعم</a>
+                </Button>
+              )}
+            </div>
+
+            {/* Customer section */}
+            <div className="mt-3 rounded-lg bg-primary/10 border border-primary/30 p-3 space-y-2">
+              <div className="font-bold neon-text">{o.customer_name}</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button asChild size="sm" variant="outline" className="h-8">
+                  <a href={`tel:${o.customer_phone}`} dir="ltr"><Phone className="ml-1 h-3.5 w-3.5" />اتصال</a>
+                </Button>
+                <Button asChild size="sm" variant="outline" className="h-8">
+                  <a href={`sms:${o.customer_phone}`} dir="ltr"><MessagesSquare className="ml-1 h-3.5 w-3.5" />SMS</a>
+                </Button>
+                <span className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</span>
+              </div>
+              <a href={custMaps} target="_blank" rel="noreferrer" className="flex items-start gap-2 text-sm text-primary hover:underline">
+                <MapPin className="h-4 w-4 mt-0.5" /><span>{o.customer_address}</span>
+              </a>
+            </div>
+
+            {o.notes && (
+              <div className="mt-3 rounded-md bg-muted p-2 text-xs whitespace-pre-wrap">
+                <div className="font-semibold mb-1">تفاصيل الطلب:</div>
+                {o.notes}
+              </div>
+            )}
+
+            <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-sm">
+              <span className="text-muted-foreground">المبلغ المستحق</span>
+              <span className="font-bold neon-text">{Number(o.total).toFixed(2)}</span>
+            </div>
+            {next.length > 0 && (
+              <div className="mt-3">
+                <Select onValueChange={(v) => updateStatus(o.id, v)}>
+                  <SelectTrigger><SelectValue placeholder="تحديث الحالة…" /></SelectTrigger>
+                  <SelectContent>
+                    {next.map((s) => <SelectItem key={s} value={s}>{STATUS_AR[s] ?? s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </Card>
+        );
+      })}
+      {list.length === 0 && (
+        <Card className="p-8 text-center text-sm text-muted-foreground md:col-span-2">لا توجد طلبات في هذه القائمة.</Card>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-cool p-6 shadow-pop text-white">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-cool p-6 shadow-pop">
         <div>
-          <h1 className="text-3xl font-extrabold">طلباتي</h1>
+          <h1 className="text-3xl font-extrabold neon-text">طلباتي</h1>
           <p className="mt-1 text-sm opacity-90">{isOnline ? "موقعك يُبث مباشرة للأدمن والمطاعم" : "فعّل الاتصال لبدء استقبال الطلبات"}</p>
         </div>
-        <div className="flex items-center gap-3 rounded-xl bg-white/20 backdrop-blur px-4 py-2">
-          <span className={`h-3 w-3 rounded-full ${isOnline ? "bg-success animate-pulse" : "bg-white/40"}`} />
+        <div className="flex items-center gap-3 rounded-xl bg-background/30 backdrop-blur px-4 py-2">
+          <span className={`h-3 w-3 rounded-full ${isOnline ? "bg-success animate-pulse" : "bg-muted-foreground/40"}`} />
           <span className="text-sm font-semibold">{isOnline ? "متصل" : "غير متصل"}</span>
           <Switch checked={isOnline} onCheckedChange={toggleOnline} />
         </div>
@@ -168,7 +263,7 @@ function Body() {
           { label: "تم التوصيل", value: totals.delivered, cls: "bg-gradient-success" },
           { label: "الأرباح", value: totals.earnings.toFixed(2), cls: "bg-gradient-warm" },
         ].map((c) => (
-          <Card key={c.label} className={`${c.cls} p-5 border-0 shadow-soft text-white`}>
+          <Card key={c.label} className={`${c.cls} p-5 border-0 shadow-pop`}>
             <div className="text-xs uppercase tracking-wider opacity-90">{c.label}</div>
             <div className="mt-2 text-3xl font-extrabold">{c.value}</div>
           </Card>
@@ -176,7 +271,7 @@ function Body() {
       </div>
 
       <Tabs defaultValue="orders">
-        <TabsList>
+        <TabsList className="bg-card p-1 shadow-soft rounded-xl">
           <TabsTrigger value="orders"><LayoutDashboard className="ml-2 h-4 w-4" />الطلبات</TabsTrigger>
           <TabsTrigger value="map"><MapIcon className="ml-2 h-4 w-4" />موقعي</TabsTrigger>
           <TabsTrigger value="complaints"><AlertTriangle className="ml-2 h-4 w-4" />الشكاوى</TabsTrigger>
@@ -184,69 +279,16 @@ function Body() {
         </TabsList>
 
         <TabsContent value="orders" className="mt-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            {orders.map((o) => {
-              const next = NEXT_STATUS[o.status] ?? [];
-              const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customer_address)}`;
-              return (
-                <Card key={o.id} className="p-5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-primary text-base font-extrabold text-primary-foreground shadow-pop">{o.daily_number ?? "—"}</span>
-                      <div>
-                        <div className="text-lg font-bold">{o.customer_name}</div>
-                        <div className="font-mono text-[10px] text-muted-foreground" dir="ltr">{o.order_number}</div>
-                      </div>
-                    </div>
-                    <Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge>
-                  </div>
-                  <div className="mt-3 space-y-2 text-sm">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Button asChild size="sm" variant="outline" className="h-8">
-                        <a href={`tel:${o.customer_phone}`} dir="ltr"><Phone className="ml-1 h-3.5 w-3.5" />اتصال</a>
-                      </Button>
-                      <Button asChild size="sm" variant="outline" className="h-8">
-                        <a href={`sms:${o.customer_phone}`} dir="ltr"><MessagesSquare className="ml-1 h-3.5 w-3.5" />SMS</a>
-                      </Button>
-                      <span className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</span>
-                    </div>
-                    <a href={mapsHref} target="_blank" rel="noreferrer" className="flex items-start gap-2 text-primary hover:underline">
-                      <MapPin className="h-4 w-4 mt-0.5" /><span>{o.customer_address}</span>
-                    </a>
-                    {o.notes && (
-                      <div className="rounded-md bg-muted p-2 text-xs whitespace-pre-wrap">
-                        <div className="font-semibold mb-1">تفاصيل الطلب:</div>
-                        {o.notes}
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-sm">
-                    <span className="text-muted-foreground">المبلغ المستحق</span>
-                    <span className="font-bold">{Number(o.total).toFixed(2)}</span>
-                  </div>
-                  {next.length > 0 && (
-                    <div className="mt-3 flex gap-2">
-                      <Select onValueChange={(v) => updateStatus(o.id, v)}>
-                        <SelectTrigger><SelectValue placeholder="تحديث الحالة…" /></SelectTrigger>
-                        <SelectContent>
-                          {next.map((s) => <SelectItem key={s} value={s}>{STATUS_AR[s] ?? s}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  {(o.status === "pending" || o.status === "accepted") && (
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <Button className="bg-gradient-success shadow-pop" onClick={() => updateStatus(o.id, "preparing")}>شاهدت وبدأت التنفيذ</Button>
-                      <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => rejectOrder(o.id)}>رفض</Button>
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-            {orders.length === 0 && (
-              <Card className="p-8 text-center text-sm text-muted-foreground md:col-span-2">لا توجد طلبات معينة لك.</Card>
-            )}
-          </div>
+          <Tabs defaultValue="active">
+            <TabsList className="bg-card p-1 shadow-soft rounded-xl">
+              <TabsTrigger value="active">نشطة ({grouped.active.length})</TabsTrigger>
+              <TabsTrigger value="done">مكتملة ({grouped.done.length})</TabsTrigger>
+              <TabsTrigger value="failed">ملغاة/مرتجعة ({grouped.failed.length})</TabsTrigger>
+            </TabsList>
+            <TabsContent value="active" className="mt-4">{renderOrders(grouped.active)}</TabsContent>
+            <TabsContent value="done" className="mt-4">{renderOrders(grouped.done)}</TabsContent>
+            <TabsContent value="failed" className="mt-4">{renderOrders(grouped.failed)}</TabsContent>
+          </Tabs>
         </TabsContent>
 
         <TabsContent value="map" className="mt-4">

@@ -12,13 +12,25 @@ export const STATUS_AR: Record<string, string> = {
 };
 
 export const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-warning/20 text-warning",
-  accepted: "bg-blue-500/20 text-blue-400",
-  preparing: "bg-blue-500/20 text-blue-400",
-  picked_up: "bg-purple-500/20 text-purple-400",
-  on_the_way: "bg-purple-500/20 text-purple-400",
-  delivered: "bg-success/20 text-success",
-  cancelled: "bg-destructive/20 text-destructive",
-  returned: "bg-muted text-muted-foreground",
-  on_hold: "bg-amber-500/20 text-amber-500",
+  pending: "bg-warning/20 text-warning border border-warning/40",
+  accepted: "bg-info/20 text-info border border-info/40",
+  preparing: "bg-info/20 text-info border border-info/40",
+  picked_up: "bg-accent/20 text-accent border border-accent/40",
+  on_the_way: "bg-accent/20 text-accent border border-accent/40",
+  delivered: "bg-success/20 text-success border border-success/40",
+  cancelled: "bg-destructive/20 text-destructive border border-destructive/40",
+  returned: "bg-muted text-muted-foreground border border-border",
+  on_hold: "bg-warning/20 text-warning border border-warning/40",
 };
+
+export const ACTIVE_STATUSES = ["pending", "accepted", "preparing", "picked_up", "on_the_way", "on_hold"];
+export const DONE_STATUSES = ["delivered"];
+export const FAILED_STATUSES = ["cancelled", "returned"];
+
+export type StatusGroup = "active" | "done" | "failed";
+
+export function statusGroup(s: string): StatusGroup {
+  if (DONE_STATUSES.includes(s)) return "done";
+  if (FAILED_STATUSES.includes(s)) return "failed";
+  return "active";
+}

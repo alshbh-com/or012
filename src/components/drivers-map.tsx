@@ -6,6 +6,8 @@ export interface MapDriver {
   lng: number;
   label: string;
   online: boolean;
+  hasOrders?: boolean;
+  activeCount?: number;
 }
 
 const InnerMap = lazy(() => import("./drivers-map-inner"));
