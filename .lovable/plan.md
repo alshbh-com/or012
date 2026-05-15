@@ -1,59 +1,80 @@
-# خطة: دعم إشعارات Median.co WebView (Native Push)
+# خطة العمل الشاملة
 
-## الهدف
-تطبيقك Lovable شغّال على المتصفح، ولما تلفّه بـ Median.co كـ WebView، الإشعارات لازم تشتغل **native** عبر OneSignal Native Plugin (مش Web Push)، ويوصل نفس الإشعار لنفس المستخدم على كل أجهزته.
+## 1. تغيير الهوية (R&O + تصميم نيون جامد)
+- تغيير اسم التطبيق إلى **R&O** في:
+  - `src/styles.css` متغيرات الـ theme (ألوان نيون: أخضر/سماوي/فوشيا على خلفية داكنة جداً)
+  - `app_settings.app_name` → "R&O"
+  - عناوين الصفحات + favicon + manifest
+- إضافة تأثيرات نيون: glow shadows, gradient backgrounds, neon borders
+- تحديث `dashboard-layout` لاستخدام التصميم الجديد
 
-## ما الذي سيتم تعديله في الكود
+## 2. إعادة هيكلة صفحات الأدمن/المطعم/المندوب بنظام تبويبات حسب الحالة
+بدل عرض كل الطلبات في قائمة واحدة، 3 تبويبات (Tabs) في الأعلى:
+- **نشطة** (pending, accepted, preparing, picked_up, on_the_way)
+- **مكتملة** (delivered)
+- **ملغاة/مرتجعة** (cancelled, returned)
 
-### تحديث `src/lib/onesignal.ts`
-يكتشف البيئة تلقائياً ويستخدم الـ bridge المناسب:
-- **داخل Median WebView** → يستخدم `median.onesignal.*` (الـ native bridge اللي Median بيحقنه في `window`)
-- **متصفح عادي** → يستخدم `OneSignal` Web SDK (الحالي)
+يطبق على: `admin.tsx`, `restaurant.tsx`, `driver.tsx`
 
-نفس الدوال `osLogin(userId)` و `osLogout()` هتشتغل في الحالتين بدون تغيير في `use-auth.tsx`.
+## 3. قيود الصلاحيات
+- **المندوب**: حذف زر "رفض" — يأخذ كل الطلبات المعينة
+- **المطعم**: يتحكم فقط في حالة `preparing` (يأكد التحضير). لا يغير حالات أخرى.
 
-### إضافة `src/lib/median.ts` (جديد)
-helper صغير يكتشف:
-- `isMedianApp()` — هل احنا جوة Median WebView؟ (بفحص `window.median` أو user-agent)
-- يضمن نستنى تحميل الـ bridge قبل ما ننده عليه
+## 4. صفحة المندوب — عرض معلومات المطعم
+عند فتح طلب، يظهر:
+1. اسم المطعم + لوكيشن المطعم (زر "اتجاهات للمطعم")
+2. ثم تفاصيل العميل (اسم/تليفون/عنوان)
 
-## ما يجب عليك فعله **مرة واحدة** خارج الكود (دليل خطوة بخطوة)
+## 5. حل مشكلة scroll في dialog إضافة طلب
+- إضافة `max-h-[90vh] overflow-y-auto` على محتوى الـ Dialog في `restaurant.tsx`
 
-سأكتب دليل عربي مفصّل في ملف `MEDIAN_SETUP.md` يشرح:
+## 6. صفحات حسابات (للأدمن)
+تبويب جديد "الحسابات" بـ:
+- إجمالي مكتمل / ملغى / مرتجع / إيرادات / عمولة
+- **تحصيل المناديب**: لكل مندوب، عدد الطلبات المسلمة + إجمالي مبالغ التحصيل المستحقة
+- **تحصيل المطاعم**: لكل مطعم، إجمالي طلبات المسلمة + المستحق
 
-### أ) Firebase (مجاني — لـ Android Push)
-1. ادخل https://console.firebase.google.com → Create project
-2. Add Android app → اكتب package name الخاص بتطبيق Median
-3. حمّل `google-services.json`
-4. خد **Server Key** من Project Settings → Cloud Messaging
+## 7. خانة "طلبات غير معينة" (للأدمن)
+تبويب أو قسم يعرض الطلبات `pending` بدون `driver_id` — للإسناد السريع
 
-### ب) OneSignal Dashboard
-1. ادخل https://dashboard.onesignal.com → تطبيقك الموجود
-2. Settings → Platforms → **Google Android (FCM)**
-3. الصق الـ Firebase Server Key
-4. لـ iOS (لو محتاج لاحقاً): Settings → Apple iOS (APNs) — يتطلب Apple Developer Account
+## 8. خانة "حالة المناديب" (للأدمن)
+جدول لكل مندوب: الاسم / متصل أم لا / عدد الطلبات النشطة / حالة (فاضي/مشغول)
 
-### ج) Median.co Dashboard
-1. ادخل تطبيقك على median.co
-2. **Native Plugins → OneSignal**
-3. حط نفس الـ App ID: `13096a2e-b5f2-4d42-a446-02b83d93bbc5`
-4. اعمل Build جديد للتطبيق
+## 9. تحسين خريطة التتبع
+- على صفحة الأدمن: عرض **كل** المناديب على الخريطة (متصلين + غير متصلين)
+- علامة (badge) فوق أيقونة المندوب: "معه طلبات" أو "فاضي"
 
-## النتيجة
+## التفاصيل التقنية
 
-```text
-طلب جديد → DB trigger → /api/public/notify-push → OneSignal → external_id ──┬→ Web Push (متصفح)
-                                                                              └→ Native Push (Median app: Android/iOS)
+### ملفات سيتم تعديلها
+```
+src/styles.css                       — ألوان نيون + glows
+src/routes/__root.tsx               — title R&O
+index.html                          — title + meta
+src/components/dashboard-layout.tsx — اسم + theme
+src/routes/admin.tsx                — تبويبات + حسابات + غير معينة + مناديب
+src/routes/restaurant.tsx           — تبويبات + scroll fix dialog + قيد preparing
+src/routes/driver.tsx               — تبويبات + إزالة رفض + معلومات المطعم
+src/components/drivers-map-inner.tsx — badge فوق الأيقونة
 ```
 
-نفس المستخدم يوصله الإشعار سواء فاتح الموقع في المتصفح أو فاتح تطبيق Median أو حتى التطبيق مقفول — تلقائياً.
+### استعلامات الحسابات
+```sql
+-- تحصيل مندوب
+SELECT driver_id, COUNT(*), SUM(total), SUM(delivery_price)
+FROM orders WHERE status='delivered' GROUP BY driver_id;
 
-## ملفات هتتعدّل
+-- تحصيل مطعم
+SELECT restaurant_id, COUNT(*), SUM(items_total)
+FROM orders WHERE status='delivered' GROUP BY restaurant_id;
+```
+لا تغييرات في schema الـ DB — الأعمدة موجودة بالفعل.
 
-- `src/lib/onesignal.ts` (تحديث: detection + Median bridge fallback)
-- `src/lib/median.ts` (جديد: helper)
-- `MEDIAN_SETUP.md` (جديد: دليل عربي للخطوات اليدوية في Firebase + OneSignal + Median)
+### تحديث app_settings
+```sql
+UPDATE app_settings SET app_name='R&O' WHERE id=1;
+```
 
-## ملاحظة مهمة
+---
 
-الـ backend (DB trigger + endpoint + OneSignal API call) **مش هيتغيّر إطلاقاً**. الإعداد اللي عملناه قبل كده شغّال زي ما هو لـ Web و Native معاً.
+هل أبدأ التنفيذ؟ أو هل تريد تعديل أي جزء قبل البدء؟
