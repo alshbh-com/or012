@@ -22,7 +22,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { STATUS_AR, STATUS_COLORS } from "@/lib/i18n";
+import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
 import { ChatPanel } from "@/components/chat-panel";
 import { ComplaintsList } from "@/components/complaints";
 import { useNotificationPermission, notify } from "@/lib/notifications";
@@ -82,6 +82,9 @@ function AdminContent() {
       <Tabs defaultValue="orders">
         <TabsList className="flex flex-wrap h-auto bg-card p-1 shadow-soft rounded-xl">
           <TabsTrigger value="orders"><Package className="ml-2 h-4 w-4" />الطلبات</TabsTrigger>
+          <TabsTrigger value="unassigned"><AlertTriangle className="ml-2 h-4 w-4" />غير معينة</TabsTrigger>
+          <TabsTrigger value="drivers-status"><Truck className="ml-2 h-4 w-4" />حالة المندوبين</TabsTrigger>
+          <TabsTrigger value="accounts"><LayoutDashboard className="ml-2 h-4 w-4" />الحسابات</TabsTrigger>
           <TabsTrigger value="reports"><LayoutDashboard className="ml-2 h-4 w-4" />التقارير</TabsTrigger>
           <TabsTrigger value="map"><MapIcon className="ml-2 h-4 w-4" />التتبع</TabsTrigger>
           <TabsTrigger value="chat"><MessagesSquare className="ml-2 h-4 w-4" />المحادثات</TabsTrigger>
@@ -92,6 +95,9 @@ function AdminContent() {
           <TabsTrigger value="settings"><SettingsIcon className="ml-2 h-4 w-4" />الإعدادات</TabsTrigger>
         </TabsList>
         <TabsContent value="orders" className="mt-4"><OrdersTab /></TabsContent>
+        <TabsContent value="unassigned" className="mt-4"><UnassignedTab /></TabsContent>
+        <TabsContent value="drivers-status" className="mt-4"><DriversStatusTab /></TabsContent>
+        <TabsContent value="accounts" className="mt-4"><AccountsTab /></TabsContent>
         <TabsContent value="reports" className="mt-4"><ReportsTab /></TabsContent>
         <TabsContent value="map" className="mt-4"><MapTab /></TabsContent>
         <TabsContent value="chat" className="mt-4"><ChatPanel /></TabsContent>
