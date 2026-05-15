@@ -35,10 +35,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "O&R — نظام إدارة الدليفري" },
+      { title: "R&O — نظام إدارة الدليفري" },
       { name: "description", content: "نظام احترافي لإدارة الطلبات والمندوبين والمطاعم" },
-      { property: "og:title", content: "O&R — نظام إدارة الدليفري" },
-      { name: "twitter:title", content: "O&R — نظام إدارة الدليفري" },
+      { property: "og:title", content: "R&O — نظام إدارة الدليفري" },
+      { name: "twitter:title", content: "R&O — نظام إدارة الدليفري" },
       { property: "og:description", content: "نظام احترافي لإدارة الطلبات والمندوبين والمطاعم" },
       { name: "twitter:description", content: "نظام احترافي لإدارة الطلبات والمندوبين والمطاعم" },
       { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/080c46b3-5b9c-4127-bb0d-1b2bf834a9c1" },

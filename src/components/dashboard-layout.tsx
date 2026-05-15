@@ -35,11 +35,11 @@ export function DashboardLayout({ title, items, children }: Props) {
       {/* Sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col border-l border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
         <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-extrabold">
-            O&amp;R
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-primary text-primary-foreground font-extrabold shadow-pop neon-text">
+            R&amp;O
           </div>
           <div>
-            <div className="text-sm font-semibold">O&amp;R</div>
+            <div className="text-sm font-semibold neon-text">R&amp;O</div>
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{title}</div>
           </div>
         </div>
@@ -79,8 +79,8 @@ export function DashboardLayout({ title, items, children }: Props) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur">
           <div className="flex items-center gap-2 md:hidden">
-            <span className="flex h-7 w-7 items-center justify-center rounded bg-primary text-primary-foreground text-xs font-extrabold">O&amp;R</span>
-            <span className="font-semibold">O&amp;R</span>
+            <span className="flex h-7 w-7 items-center justify-center rounded bg-gradient-primary text-primary-foreground text-xs font-extrabold shadow-pop">R&amp;O</span>
+            <span className="font-semibold neon-text">R&amp;O</span>
             <span className="text-xs text-muted-foreground">· {title}</span>
           </div>
           <div className="hidden text-sm text-muted-foreground md:block">{title}</div>
