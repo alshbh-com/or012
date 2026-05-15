@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { LayoutDashboard, Plus, Truck, Loader2, Map as MapIcon, MessagesSquare, UtensilsCrossed, Trash2, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { STATUS_AR, STATUS_COLORS } from "@/lib/i18n";
+import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
 import { ChatPanel } from "@/components/chat-panel";
 import { ComplaintsList } from "@/components/complaints";
 import { DriversMap, type MapDriver } from "@/components/drivers-map";
@@ -169,51 +169,7 @@ function Body() {
         </TabsList>
 
         <TabsContent value="orders" className="mt-4">
-          <Card className="p-5 overflow-x-auto shadow-soft">
-            <Table>
-              <TableHeader><TableRow>
-                <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>العنوان</TableHead>
-                <TableHead>المندوب</TableHead>
-                <TableHead>الإجمالي</TableHead><TableHead>الحالة</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>
-                {orders.map((o) => {
-                  const info = o.driver_id ? driverInfo[o.driver_id] : null;
-                  return (
-                  <TableRow key={o.id}>
-                    <TableCell><span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-gradient-primary px-2 text-sm font-bold text-primary-foreground shadow-soft">{o.daily_number ?? "—"}</span></TableCell>
-                    <TableCell>
-                      <div className="font-medium">{o.customer_name}</div>
-                      <div className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</div>
-                    </TableCell>
-                    <TableCell className="max-w-[220px] truncate">{o.customer_address}</TableCell>
-                    <TableCell>
-                      {info ? (
-                        <div className="space-y-1">
-                          <div className="text-sm font-medium">{info.name}</div>
-                          <div className="flex gap-1">
-                            {info.phone && (
-                              <Button asChild size="sm" variant="outline" className="h-7 px-2 text-xs">
-                                <a href={`tel:${info.phone}`}>اتصال</a>
-                              </Button>
-                            )}
-                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                              onClick={() => { setChatTarget(info.user_id); setActiveTab("chat"); }}>
-                              رسالة
-                            </Button>
-                          </div>
-                        </div>
-                      ) : <span className="text-xs text-muted-foreground">— لم يُعيَّن</span>}
-                    </TableCell>
-                    <TableCell className="font-semibold">{Number(o.total).toFixed(2)}</TableCell>
-                    <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
-                  </TableRow>
-                  );
-                })}
-                {orders.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
-              </TableBody>
-            </Table>
-          </Card>
+          <OrdersByStatus orders={orders} driverInfo={driverInfo} setChatTarget={(id) => { setChatTarget(id); setActiveTab("chat"); }} />
         </TabsContent>
 
         <TabsContent value="products" className="mt-4">
