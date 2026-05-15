@@ -129,28 +129,289 @@ function MapTab() {
   const [drivers, setDrivers] = useState<MapDriver[]>([]);
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase.from("drivers").select("id, phone, is_online, current_lat, current_lng");
-      if (!data) return;
-      const rows = data as Array<{ id: string; phone: string | null; is_online: boolean; current_lat: number | null; current_lng: number | null }>;
+      const [{ data: ds }, { data: profs }, { data: ords }] = await Promise.all([
+        supabase.from("drivers").select("id, user_id, phone, is_online, current_lat, current_lng"),
+        supabase.from("profiles").select("id, full_name"),
+        supabase.from("orders").select("driver_id, status"),
+      ]);
+      if (!ds) return;
+      const nameMap = new Map((profs ?? []).map((p) => [p.id as string, p.full_name as string]));
+      const activeByDriver = new Map<string, number>();
+      (ords ?? []).forEach((o) => {
+        if (o.driver_id && statusGroup(o.status as string) === "active") {
+          activeByDriver.set(o.driver_id as string, (activeByDriver.get(o.driver_id as string) ?? 0) + 1);
+        }
+      });
       setDrivers(
-        rows
-          .filter((d) => d.current_lat != null && d.current_lng != null)
-          .map((d) => ({
-            id: d.id, lat: Number(d.current_lat), lng: Number(d.current_lng),
-            label: d.phone ?? d.id.slice(0, 8), online: !!d.is_online,
-          })),
+        ds.filter((d) => d.current_lat != null && d.current_lng != null).map((d) => {
+          const cnt = activeByDriver.get(d.id as string) ?? 0;
+          return {
+            id: d.id as string, lat: Number(d.current_lat), lng: Number(d.current_lng),
+            label: nameMap.get(d.user_id as string) || d.phone || (d.id as string).slice(0, 8),
+            online: !!d.is_online, hasOrders: cnt > 0, activeCount: cnt,
+          };
+        }),
       );
     };
     load();
     const ch = supabase.channel("map-drivers")
-      .on("postgres_changes", { event: "*", schema: "public", table: "drivers" }, load).subscribe();
+      .on("postgres_changes", { event: "*", schema: "public", table: "drivers" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, load).subscribe();
+    return () => { ch.unsubscribe(); };
+  }, []);
+  const busy = drivers.filter((d) => d.hasOrders).length;
+  const free = drivers.filter((d) => d.online && !d.hasOrders).length;
+  return (
+    <Card className="p-3">
+      <div className="mb-2 flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">تتبع كل المندوبين ({drivers.length})</span>
+        <div className="flex gap-3 text-xs">
+          <span className="text-accent">📦 مشغول: {busy}</span>
+          <span className="text-success">✅ فاضي: {free}</span>
+        </div>
+      </div>
+      <DriversMap drivers={drivers} />
+    </Card>
+  );
+}
+
+function UnassignedTab() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const load = async () => {
+    const [{ data: o }, { data: r }, { data: d }] = await Promise.all([
+      supabase.from("orders").select("*").is("driver_id", null).in("status", ["pending", "accepted", "preparing"]).order("created_at", { ascending: false }),
+      supabase.from("restaurants").select("*"),
+      supabase.from("drivers").select("*").eq("is_active", true),
+    ]);
+    if (o) setOrders(o as Order[]);
+    if (r) setRestaurants(r as Restaurant[]);
+    if (d) setDrivers(d as Driver[]);
+  };
+  useEffect(() => {
+    load();
+    const ch = supabase.channel("unassigned-orders")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, load).subscribe();
+    return () => { ch.unsubscribe(); };
+  }, []);
+  const assign = async (orderId: string, driverId: string) => {
+    const { error } = await supabase.from("orders").update({ driver_id: driverId, status: "accepted" }).eq("id", orderId);
+    if (error) return toast.error(error.message);
+    toast.success("تم الإسناد"); load();
+  };
+  return (
+    <Card className="p-5 shadow-soft">
+      <div className="mb-3 text-lg font-bold neon-text">طلبات غير معينة ({orders.length})</div>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead>#</TableHead><TableHead>المطعم</TableHead><TableHead>العميل</TableHead>
+            <TableHead>العنوان</TableHead><TableHead>الإجمالي</TableHead><TableHead>إسناد لمندوب</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {orders.map((o) => (
+              <TableRow key={o.id}>
+                <TableCell><span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-gradient-warm px-2 text-xs font-bold text-white">{o.daily_number ?? "—"}</span></TableCell>
+                <TableCell>{restaurants.find((r) => r.id === o.restaurant_id)?.name ?? "—"}</TableCell>
+                <TableCell>
+                  <div className="font-medium">{o.customer_name}</div>
+                  <div className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</div>
+                </TableCell>
+                <TableCell className="max-w-[220px] truncate text-sm">{o.customer_address}</TableCell>
+                <TableCell className="font-semibold">{Number(o.total).toFixed(2)}</TableCell>
+                <TableCell>
+                  <Select onValueChange={(v) => assign(o.id, v)}>
+                    <SelectTrigger className="w-44 h-8"><SelectValue placeholder="اختر مندوب…" /></SelectTrigger>
+                    <SelectContent>
+                      {drivers.map((d) => <SelectItem key={d.id} value={d.id}>{d.phone ?? d.id.slice(0, 8)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+              </TableRow>
+            ))}
+            {orders.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">لا توجد طلبات في انتظار الإسناد</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </div>
+    </Card>
+  );
+}
+
+function DriversStatusTab() {
+  interface Row { id: string; name: string; phone: string | null; online: boolean; active: number; delivered: number }
+  const [rows, setRows] = useState<Row[]>([]);
+  const load = async () => {
+    const [{ data: ds }, { data: profs }, { data: ords }] = await Promise.all([
+      supabase.from("drivers").select("id, user_id, phone, is_online, is_active").eq("is_active", true),
+      supabase.from("profiles").select("id, full_name"),
+      supabase.from("orders").select("driver_id, status"),
+    ]);
+    if (!ds) return;
+    const nameMap = new Map((profs ?? []).map((p) => [p.id as string, p.full_name as string]));
+    const activeBy = new Map<string, number>();
+    const doneBy = new Map<string, number>();
+    (ords ?? []).forEach((o) => {
+      if (!o.driver_id) return;
+      const g = statusGroup(o.status as string);
+      if (g === "active") activeBy.set(o.driver_id as string, (activeBy.get(o.driver_id as string) ?? 0) + 1);
+      if (g === "done") doneBy.set(o.driver_id as string, (doneBy.get(o.driver_id as string) ?? 0) + 1);
+    });
+    setRows(ds.map((d) => ({
+      id: d.id as string,
+      name: nameMap.get(d.user_id as string) || d.phone || (d.id as string).slice(0, 8),
+      phone: d.phone, online: !!d.is_online,
+      active: activeBy.get(d.id as string) ?? 0,
+      delivered: doneBy.get(d.id as string) ?? 0,
+    })));
+  };
+  useEffect(() => {
+    load();
+    const ch = supabase.channel("drivers-status-tab")
+      .on("postgres_changes", { event: "*", schema: "public", table: "drivers" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, load).subscribe();
     return () => { ch.unsubscribe(); };
   }, []);
   return (
-    <Card className="p-3">
-      <div className="mb-2 text-sm text-muted-foreground">تتبع مباشر للمندوبين على الخريطة ({drivers.length} مندوب نشط)</div>
-      <DriversMap drivers={drivers} />
+    <Card className="p-5 shadow-soft">
+      <div className="mb-3 text-lg font-bold neon-text">حالة المندوبين</div>
+      <Table>
+        <TableHeader><TableRow>
+          <TableHead>المندوب</TableHead><TableHead>الهاتف</TableHead>
+          <TableHead>الاتصال</TableHead><TableHead>طلبات نشطة</TableHead>
+          <TableHead>الحالة</TableHead><TableHead>تم التوصيل</TableHead>
+        </TableRow></TableHeader>
+        <TableBody>
+          {rows.map((d) => (
+            <TableRow key={d.id}>
+              <TableCell className="font-medium">{d.name}</TableCell>
+              <TableCell dir="ltr">{d.phone ?? "—"}</TableCell>
+              <TableCell>
+                <Badge className={d.online ? "bg-success/20 text-success border border-success/40" : "bg-muted text-muted-foreground"}>
+                  {d.online ? "متصل" : "غير متصل"}
+                </Badge>
+              </TableCell>
+              <TableCell><Badge className="bg-gradient-cool">{d.active}</Badge></TableCell>
+              <TableCell>
+                {d.active > 0
+                  ? <Badge className="bg-accent/20 text-accent border border-accent/40">📦 مشغول</Badge>
+                  : <Badge className="bg-success/20 text-success border border-success/40">✅ فاضي</Badge>}
+              </TableCell>
+              <TableCell className="font-semibold">{d.delivered}</TableCell>
+            </TableRow>
+          ))}
+          {rows.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">لا يوجد مندوبين</TableCell></TableRow>}
+        </TableBody>
+      </Table>
     </Card>
+  );
+}
+
+function AccountsTab() {
+  interface Totals { orders: number; delivered: number; cancelled: number; revenue: number; items: number; delivery: number }
+  interface RestStat { id: string; name: string; count: number; items: number; total: number }
+  interface DrvStat { id: string; name: string; count: number; fees: number; collected: number }
+  const [totals, setTotals] = useState<Totals>({ orders: 0, delivered: 0, cancelled: 0, revenue: 0, items: 0, delivery: 0 });
+  const [restStats, setRestStats] = useState<RestStat[]>([]);
+  const [drvStats, setDrvStats] = useState<DrvStat[]>([]);
+
+  const load = async () => {
+    const [{ data: ords }, { data: rs }, { data: ds }, { data: profs }] = await Promise.all([
+      supabase.from("orders").select("*"),
+      supabase.from("restaurants").select("id, name"),
+      supabase.from("drivers").select("id, user_id, phone"),
+      supabase.from("profiles").select("id, full_name"),
+    ]);
+    if (!ords) return;
+    const nameMap = new Map((profs ?? []).map((p) => [p.id as string, p.full_name as string]));
+    const delivered = (ords as Order[]).filter((o) => o.status === "delivered");
+    setTotals({
+      orders: ords.length,
+      delivered: delivered.length,
+      cancelled: (ords as Order[]).filter((o) => o.status === "cancelled" || o.status === "returned").length,
+      revenue: delivered.reduce((s, o) => s + Number(o.total ?? 0), 0),
+      items: delivered.reduce((s, o) => s + Number(o.items_total ?? 0), 0),
+      delivery: delivered.reduce((s, o) => s + Number(o.delivery_price ?? 0), 0),
+    });
+    setRestStats((rs ?? []).map((r) => {
+      const list = delivered.filter((o) => o.restaurant_id === r.id);
+      return {
+        id: r.id as string, name: r.name as string, count: list.length,
+        items: list.reduce((s, o) => s + Number(o.items_total ?? 0), 0),
+        total: list.reduce((s, o) => s + Number(o.total ?? 0), 0),
+      };
+    }).filter((s) => s.count > 0));
+    setDrvStats((ds ?? []).map((d) => {
+      const list = delivered.filter((o) => o.driver_id === d.id);
+      return {
+        id: d.id as string,
+        name: nameMap.get(d.user_id as string) || d.phone || (d.id as string).slice(0, 8),
+        count: list.length,
+        fees: list.reduce((s, o) => s + Number(o.delivery_price ?? 0), 0),
+        collected: list.reduce((s, o) => s + Number(o.total ?? 0), 0),
+      };
+    }).filter((s) => s.count > 0));
+  };
+  useEffect(() => {
+    load();
+    const ch = supabase.channel("accounts-tab")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, load).subscribe();
+    return () => { ch.unsubscribe(); };
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: "إجمالي الطلبات", value: totals.orders, cls: "bg-gradient-primary" },
+          { label: "تم التوصيل", value: totals.delivered, cls: "bg-gradient-success" },
+          { label: "ملغاة/مرتجعة", value: totals.cancelled, cls: "bg-gradient-warm" },
+          { label: "الإيرادات", value: totals.revenue.toFixed(2), cls: "bg-gradient-cool" },
+        ].map((c) => (
+          <Card key={c.label} className={`${c.cls} p-5 border-0 shadow-pop`}>
+            <div className="text-xs uppercase tracking-wider opacity-90">{c.label}</div>
+            <div className="mt-2 text-3xl font-extrabold">{c.value}</div>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="p-5 shadow-soft">
+        <div className="mb-3 text-lg font-bold neon-text">تحصيل المطاعم</div>
+        <Table>
+          <TableHeader><TableRow><TableHead>المطعم</TableHead><TableHead>طلبات مسلمة</TableHead><TableHead>قيمة المنتجات</TableHead><TableHead>المستحق للمطعم</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {restStats.map((s) => (
+              <TableRow key={s.id}>
+                <TableCell className="font-medium">{s.name}</TableCell>
+                <TableCell><Badge className="bg-gradient-primary">{s.count}</Badge></TableCell>
+                <TableCell>{s.items.toFixed(2)}</TableCell>
+                <TableCell className="font-bold text-success">{s.items.toFixed(2)}</TableCell>
+              </TableRow>
+            ))}
+            {restStats.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-sm text-muted-foreground">لا توجد بيانات</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </Card>
+
+      <Card className="p-5 shadow-soft">
+        <div className="mb-3 text-lg font-bold neon-text-accent">تحصيل المندوبين</div>
+        <Table>
+          <TableHeader><TableRow><TableHead>المندوب</TableHead><TableHead>عدد التوصيلات</TableHead><TableHead>أتعاب التوصيل</TableHead><TableHead>إجمالي محصل</TableHead><TableHead>المستحق على المندوب</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {drvStats.map((s) => (
+              <TableRow key={s.id}>
+                <TableCell className="font-medium">{s.name}</TableCell>
+                <TableCell><Badge className="bg-gradient-cool">{s.count}</Badge></TableCell>
+                <TableCell className="text-success">{s.fees.toFixed(2)}</TableCell>
+                <TableCell>{s.collected.toFixed(2)}</TableCell>
+                <TableCell className="font-bold text-accent">{(s.collected - s.fees).toFixed(2)}</TableCell>
+              </TableRow>
+            ))}
+            {drvStats.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground">لا توجد بيانات</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </Card>
+    </div>
   );
 }
 
