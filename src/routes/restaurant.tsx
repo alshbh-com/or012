@@ -13,26 +13,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { LayoutDashboard, Plus, Truck, Loader2, Map as MapIcon, MessagesSquare, UtensilsCrossed, Trash2, X, AlertTriangle } from "lucide-react";
+import { LayoutDashboard, Plus, Truck, Loader2, UtensilsCrossed, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
-import { ChatPanel } from "@/components/chat-panel";
-import { ComplaintsList } from "@/components/complaints";
-import { DriversMap, type MapDriver } from "@/components/drivers-map";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 
 export const Route = createFileRoute("/restaurant")({
   component: RestaurantPage,
 });
 
-const navItems: NavItem[] = [{ to: "/restaurant", label: "الطلبات", icon: LayoutDashboard }];
-
 interface City { id: string; name: string; delivery_price: number }
 interface Product { id: string; name: string; price: number; is_active: boolean }
 interface Order {
   id: string; order_number: string; daily_number: number | null; customer_name: string; customer_phone: string;
   customer_address: string; items_total: number; delivery_price: number; total: number;
-  status: string; driver_id: string | null; created_at: string; notes: string | null;
+  status: string; driver_id: string | null; created_at: string; notes: string | null; city_id: string | null;
 }
 
 function RestaurantPage() {
@@ -40,11 +35,7 @@ function RestaurantPage() {
   if (loading) return <div className="flex min-h-screen items-center justify-center"><Truck className="h-8 w-8 animate-pulse text-primary" /></div>;
   if (!user) return <Navigate to="/login" />;
   if (!roles.includes("restaurant")) return <Navigate to="/" />;
-  return (
-    <DashboardLayout title="مطعم" items={navItems}>
-      <Body />
-    </DashboardLayout>
-  );
+  return <Body />;
 }
 
 function Body() {
@@ -53,11 +44,12 @@ function Body() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [drivers, setDrivers] = useState<MapDriver[]>([]);
   const [driverInfo, setDriverInfo] = useState<Record<string, { name: string; phone: string | null; user_id: string }>>({});
-  const [chatTarget, setChatTarget] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("orders");
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [open, setOpen] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterCity, setFilterCity] = useState<string>("all");
+  const [filterDate, setFilterDate] = useState<string>("");
 
   useNotificationPermission();
 
@@ -72,7 +64,7 @@ function Body() {
   };
 
   const loadDrivers = async () => {
-    const { data } = await supabase.from("drivers").select("id, user_id, phone, is_online, current_lat, current_lng");
+    const { data } = await supabase.from("drivers").select("id, user_id, phone");
     if (!data) return;
     const userIds = data.map((d) => d.user_id).filter(Boolean) as string[];
     const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", userIds);
@@ -82,12 +74,6 @@ function Body() {
       info[d.id] = { name: nameMap.get(d.user_id) || d.phone || "مندوب", phone: d.phone, user_id: d.user_id };
     });
     setDriverInfo(info);
-    setDrivers(
-      data.filter((d) => d.current_lat != null && d.current_lng != null).map((d) => ({
-        id: d.id, lat: Number(d.current_lat), lng: Number(d.current_lng),
-        label: info[d.id].name, online: !!d.is_online,
-      })),
-    );
   };
 
   useEffect(() => {
@@ -115,10 +101,15 @@ function Body() {
             if (o.status) notify("تحديث طلب", `${o.order_number}: ${STATUS_AR[o.status] ?? o.status}`);
           }
         }).subscribe();
-    const dch = supabase.channel("rest-drivers")
-      .on("postgres_changes", { event: "*", schema: "public", table: "drivers" }, loadDrivers).subscribe();
-    return () => { ch.unsubscribe(); dch.unsubscribe(); };
+    return () => { ch.unsubscribe(); };
   }, [restaurantId]);
+
+  const filtered = orders.filter((o) => {
+    if (filterStatus !== "all" && o.status !== filterStatus) return false;
+    if (filterCity !== "all" && o.city_id !== filterCity) return false;
+    if (filterDate && new Date(o.created_at).toISOString().slice(0, 10) !== filterDate) return false;
+    return true;
+  });
 
   const totals = {
     today: orders.filter((o) => new Date(o.created_at).toDateString() === new Date().toDateString()).length,
@@ -126,78 +117,80 @@ function Body() {
     delivered: orders.filter((o) => o.status === "delivered").length,
   };
 
+  const navItems: NavItem[] = [
+    { label: "اللوحة", icon: LayoutDashboard, onSelect: () => setActiveTab("dashboard") },
+    { label: "القائمة (المنتجات)", icon: UtensilsCrossed, onSelect: () => setActiveTab("products") },
+  ];
+
   if (!restaurantId) {
-    return <Card className="p-8 text-center text-sm text-muted-foreground">لم يتم إعداد ملف المطعم بعد. يرجى التواصل مع المسؤول.</Card>;
+    return (
+      <DashboardLayout title="مطعم" items={[]} showBell={false}>
+        <Card className="p-8 text-center text-sm text-muted-foreground">لم يتم إعداد ملف المطعم بعد. يرجى التواصل مع المسؤول.</Card>
+      </DashboardLayout>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-warm p-6 shadow-pop">
-        <div>
-          <h1 className="text-3xl font-extrabold">لوحة المطعم</h1>
-          <p className="mt-1 text-sm opacity-90">إدارة طلباتك وقائمتك بسهولة.</p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button size="lg" className="bg-white text-primary hover:bg-white/90 shadow-pop"><Plus className="ml-2 h-5 w-5" />طلب جديد</Button></DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>إنشاء طلب جديد</DialogTitle></DialogHeader>
-            <NewOrderForm restaurantId={restaurantId} cities={cities} products={products} onDone={() => { setOpen(false); loadOrders(restaurantId); }} />
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[
-          { label: "طلبات اليوم", value: totals.today, cls: "bg-gradient-primary" },
-          { label: "نشطة الآن", value: totals.active, cls: "bg-gradient-cool" },
-          { label: "تم التوصيل (الكلي)", value: totals.delivered, cls: "bg-gradient-success" },
-        ].map((c) => (
-          <Card key={c.label} className={`${c.cls} p-5 border-0 shadow-soft text-white`}>
-            <div className="text-xs uppercase tracking-wider opacity-90">{c.label}</div>
-            <div className="mt-2 text-3xl font-extrabold">{c.value}</div>
-          </Card>
-        ))}
-      </div>
-
+    <DashboardLayout title="مطعم" items={navItems} showBell={false}>
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-card p-1 shadow-soft rounded-xl">
-          <TabsTrigger value="orders"><LayoutDashboard className="ml-2 h-4 w-4" />الطلبات</TabsTrigger>
-          <TabsTrigger value="products"><UtensilsCrossed className="ml-2 h-4 w-4" />القائمة</TabsTrigger>
-          <TabsTrigger value="map"><MapIcon className="ml-2 h-4 w-4" />تتبع المندوبين</TabsTrigger>
-          <TabsTrigger value="complaints"><AlertTriangle className="ml-2 h-4 w-4" />الشكاوى</TabsTrigger>
-          <TabsTrigger value="chat"><MessagesSquare className="ml-2 h-4 w-4" />المحادثات</TabsTrigger>
-        </TabsList>
+        <TabsContent value="dashboard" className="mt-0 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-warm p-5 shadow-pop">
+            <div>
+              <h1 className="text-2xl font-extrabold">لوحة المطعم</h1>
+              <p className="mt-1 text-xs opacity-90">إدارة طلباتك بسهولة.</p>
+            </div>
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild><Button size="lg" className="bg-white text-primary hover:bg-white/90 shadow-pop"><Plus className="ml-2 h-5 w-5" />طلب جديد</Button></DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader><DialogTitle>إنشاء طلب جديد</DialogTitle></DialogHeader>
+                <NewOrderForm restaurantId={restaurantId} cities={cities} products={products} onDone={() => { setOpen(false); loadOrders(restaurantId); }} />
+              </DialogContent>
+            </Dialog>
+          </div>
 
-        <TabsContent value="orders" className="mt-4">
-          <OrdersByStatus orders={orders} driverInfo={driverInfo} setChatTarget={(id) => { setChatTarget(id); setActiveTab("chat"); }} />
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+            <Card className="bg-gradient-primary p-4 border-0 shadow-pop text-white"><div className="text-[10px] uppercase opacity-90">طلبات اليوم</div><div className="text-2xl font-extrabold">{totals.today}</div></Card>
+            <Card className="bg-gradient-cool p-4 border-0 shadow-pop text-white"><div className="text-[10px] uppercase opacity-90">نشطة الآن</div><div className="text-2xl font-extrabold">{totals.active}</div></Card>
+            <Card className="bg-gradient-success p-4 border-0 shadow-pop text-white"><div className="text-[10px] uppercase opacity-90">تم التوصيل</div><div className="text-2xl font-extrabold">{totals.delivered}</div></Card>
+            <Card className="bg-card p-4 shadow-soft"><div className="text-[10px] uppercase text-muted-foreground">إجمالي الطلبات</div><div className="text-2xl font-extrabold neon-text">{orders.length}</div></Card>
+          </div>
+
+          {/* Filters */}
+          <Card className="p-3 shadow-soft">
+            <div className="grid gap-2 sm:grid-cols-4">
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger><SelectValue placeholder="الحالة" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل الحالات</SelectItem>
+                  {Object.entries(STATUS_AR).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterCity} onValueChange={setFilterCity}>
+                <SelectTrigger><SelectValue placeholder="المدينة" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل المدن</SelectItem>
+                  {cities.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} dir="ltr" />
+              <Button variant="outline" onClick={() => { setFilterStatus("all"); setFilterCity("all"); setFilterDate(""); }}>مسح الفلاتر</Button>
+            </div>
+          </Card>
+
+          <OrdersByStatus orders={filtered} driverInfo={driverInfo} />
         </TabsContent>
 
-        <TabsContent value="products" className="mt-4">
+        <TabsContent value="products" className="mt-0">
           <ProductsTab restaurantId={restaurantId} products={products} reload={() => loadProducts(restaurantId)} />
         </TabsContent>
-
-        <TabsContent value="map" className="mt-4">
-          <Card className="p-3 shadow-soft">
-            <div className="mb-2 text-sm text-muted-foreground">المندوبين النشطين على الخريطة ({drivers.length})</div>
-            <DriversMap drivers={drivers} />
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="complaints" className="mt-4">
-          <ComplaintsList mode="restaurant" restaurantId={restaurantId} />
-        </TabsContent>
-
-        <TabsContent value="chat" className="mt-4">
-          <ChatPanel initialContactId={chatTarget} />
-        </TabsContent>
       </Tabs>
-    </div>
+    </DashboardLayout>
   );
 }
 
 type DriverInfoMap = Record<string, { name: string; phone: string | null; user_id: string }>;
 
-function OrdersByStatus({ orders, driverInfo, setChatTarget }: { orders: Order[]; driverInfo: DriverInfoMap; setChatTarget: (id: string) => void }) {
+function OrdersByStatus({ orders, driverInfo }: { orders: Order[]; driverInfo: DriverInfoMap }) {
   const groups = {
     active: orders.filter((o) => statusGroup(o.status) === "active"),
     done: orders.filter((o) => statusGroup(o.status) === "done"),
@@ -213,7 +206,10 @@ function OrdersByStatus({ orders, driverInfo, setChatTarget }: { orders: Order[]
       <Table>
         <TableHeader><TableRow>
           <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>العنوان</TableHead>
-          <TableHead>المندوب</TableHead><TableHead>الإجمالي</TableHead><TableHead>الحالة</TableHead>
+          <TableHead>المندوب</TableHead>
+          <TableHead>التوصيل</TableHead>
+          <TableHead>الإجمالي</TableHead>
+          <TableHead>الحالة</TableHead>
           {showPreparingBtn && <TableHead>إجراء</TableHead>}
         </TableRow></TableHeader>
         <TableBody>
@@ -232,20 +228,15 @@ function OrdersByStatus({ orders, driverInfo, setChatTarget }: { orders: Order[]
                   {info ? (
                     <div className="space-y-1">
                       <div className="text-sm font-medium">{info.name}</div>
-                      <div className="flex gap-1">
-                        {info.phone && (
-                          <Button asChild size="sm" variant="outline" className="h-7 px-2 text-xs">
-                            <a href={`tel:${info.phone}`}>اتصال</a>
-                          </Button>
-                        )}
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                          onClick={() => setChatTarget(info.user_id)}>
-                          رسالة
+                      {info.phone && (
+                        <Button asChild size="sm" variant="outline" className="h-7 px-2 text-xs">
+                          <a href={`tel:${info.phone}`}>اتصال</a>
                         </Button>
-                      </div>
+                      )}
                     </div>
                   ) : <span className="text-xs text-muted-foreground">— لم يُعيَّن</span>}
                 </TableCell>
+                <TableCell className="font-semibold text-accent">{Number(o.delivery_price).toFixed(2)}</TableCell>
                 <TableCell className="font-semibold">{Number(o.total).toFixed(2)}</TableCell>
                 <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
                 {showPreparingBtn && (
@@ -260,7 +251,7 @@ function OrdersByStatus({ orders, driverInfo, setChatTarget }: { orders: Order[]
               </TableRow>
             );
           })}
-          {list.length === 0 && <TableRow><TableCell colSpan={showPreparingBtn ? 7 : 6} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
+          {list.length === 0 && <TableRow><TableCell colSpan={showPreparingBtn ? 8 : 7} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
         </TableBody>
       </Table>
     </Card>
