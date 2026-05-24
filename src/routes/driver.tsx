@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { LayoutDashboard, MapPin, Phone, Truck, Map as MapIcon, MessagesSquare, AlertTriangle, Store } from "lucide-react";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { LayoutDashboard, MapPin, Phone, Truck, Map as MapIcon, MessagesSquare, AlertTriangle, Store, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
 import { ChatPanel } from "@/components/chat-panel";
@@ -17,15 +17,10 @@ import { ComplaintsList } from "@/components/complaints";
 import { DriversMap, type MapDriver } from "@/components/drivers-map";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 
-export const Route = createFileRoute("/driver")({
-  component: DriverPage,
-});
-
-const navItems: NavItem[] = [{ to: "/driver", label: "طلباتي", icon: LayoutDashboard }];
+export const Route = createFileRoute("/driver")({ component: DriverPage });
 
 const NEXT_STATUS: Record<string, string[]> = {
-  pending: ["preparing", "picked_up"],
-  accepted: ["preparing", "picked_up"],
+  accepted: ["picked_up"],
   preparing: ["picked_up"],
   picked_up: ["on_the_way"],
   on_the_way: ["delivered", "returned"],
@@ -34,7 +29,7 @@ const NEXT_STATUS: Record<string, string[]> = {
 interface Order {
   id: string; order_number: string; daily_number: number | null; customer_name: string; customer_phone: string;
   customer_address: string; items_total: number; delivery_price: number; total: number;
-  status: string; created_at: string; notes: string | null; restaurant_id: string;
+  status: string; created_at: string; accepted_at: string | null; notes: string | null; restaurant_id: string;
 }
 interface RestaurantInfo { id: string; name: string; address: string | null; phone: string | null }
 
@@ -43,20 +38,41 @@ function DriverPage() {
   if (loading) return <div className="flex min-h-screen items-center justify-center"><Truck className="h-8 w-8 animate-pulse text-primary" /></div>;
   if (!user) return <Navigate to="/login" />;
   if (!roles.includes("driver")) return <Navigate to="/" />;
+  return <Body />;
+}
+
+// Simple WhatsApp link normalizer (Egypt-aware)
+function waLink(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  const intl = digits.startsWith("0") ? "2" + digits : digits;
+  return `https://wa.me/${intl}`;
+}
+
+function Countdown({ deadline, label }: { deadline: number; label: string }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const diff = Math.floor((deadline - now) / 1000);
+  const overdue = diff < 0;
+  const abs = Math.abs(diff);
+  const mm = String(Math.floor(abs / 60)).padStart(2, "0");
+  const ss = String(abs % 60).padStart(2, "0");
   return (
-    <DashboardLayout title="مندوب" items={navItems}>
-      <Body />
-    </DashboardLayout>
+    <div className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold ${overdue ? "bg-destructive/15 text-destructive animate-pulse" : "bg-primary/15 text-primary"}`}>
+      <span className="opacity-80">{label}:</span>
+      <span dir="ltr">{overdue ? "-" : ""}{mm}:{ss}</span>
+    </div>
   );
 }
 
 function Body() {
   const { user } = useAuth();
   const [driverId, setDriverId] = useState<string | null>(null);
+  const [commission, setCommission] = useState(0);
   const [isOnline, setIsOnline] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [restaurants, setRestaurants] = useState<Record<string, RestaurantInfo>>({});
   const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [tab, setTab] = useState("dashboard");
   const [knownIds] = useState(new Set<string>());
 
   useNotificationPermission();
@@ -74,8 +90,6 @@ function Body() {
     }
     data.forEach((o) => knownIds.add(o.id));
     setOrders(data as Order[]);
-
-    // Fetch restaurants info
     const restIds = Array.from(new Set(data.map((o) => o.restaurant_id))).filter(Boolean);
     if (restIds.length) {
       const { data: rs } = await supabase.from("restaurants").select("id, name, address, phone").in("id", restIds);
@@ -88,9 +102,10 @@ function Body() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data: d } = await supabase.from("drivers").select("id, is_online").eq("user_id", user.id).maybeSingle();
+      const { data: d } = await supabase.from("drivers").select("id, is_online, commission_rate").eq("user_id", user.id).maybeSingle();
       if (!d) return;
-      setDriverId(d.id); setIsOnline(d.is_online);
+      setDriverId(d.id); setIsOnline(!!d.is_online);
+      setCommission(Number(d.commission_rate ?? 0));
       await loadOrders(d.id, true);
     })();
   }, [user]);
@@ -113,8 +128,7 @@ function Body() {
       async (pos) => {
         setMyPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         await supabase.from("drivers").update({
-          current_lat: pos.coords.latitude,
-          current_lng: pos.coords.longitude,
+          current_lat: pos.coords.latitude, current_lng: pos.coords.longitude,
           location_updated_at: new Date().toISOString(),
         }).eq("id", driverId);
       },
@@ -128,6 +142,13 @@ function Body() {
     if (!driverId) return;
     setIsOnline(v);
     await supabase.from("drivers").update({ is_online: v }).eq("id", driverId);
+  };
+
+  const acceptOrder = async (id: string) => {
+    const { error } = await supabase.from("orders")
+      .update({ status: "accepted", accepted_at: new Date().toISOString() } as never).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("تم قبول الطلب");
   };
 
   const updateStatus = async (id: string, status: string) => {
@@ -148,11 +169,22 @@ function Body() {
   const totals = {
     active: grouped.active.length,
     delivered: grouped.done.length,
-    earnings: grouped.done.reduce((s, o) => s + Number(o.delivery_price), 0),
+    earnings: grouped.done.reduce((s, o) => s + Number(o.delivery_price) * (commission / 100), 0),
   };
 
+  const navItems: NavItem[] = [
+    { label: "اللوحة", icon: LayoutDashboard, onSelect: () => setTab("dashboard") },
+    { label: "موقعي", icon: MapIcon, onSelect: () => setTab("map") },
+    { label: "الشكاوى", icon: AlertTriangle, onSelect: () => setTab("complaints") },
+    { label: "المحادثات", icon: MessagesSquare, onSelect: () => setTab("chat") },
+  ];
+
   if (!driverId) {
-    return <Card className="p-8 text-center text-sm text-muted-foreground">لم يتم إعداد ملف المندوب بعد. يرجى التواصل مع المسؤول.</Card>;
+    return (
+      <DashboardLayout title="مندوب" items={[]}>
+        <Card className="p-8 text-center text-sm text-muted-foreground">لم يتم إعداد ملف المندوب بعد. يرجى التواصل مع المسؤول.</Card>
+      </DashboardLayout>
+    );
   }
 
   const mapDrivers: MapDriver[] = myPos
@@ -162,10 +194,16 @@ function Body() {
   const renderOrders = (list: Order[]) => (
     <div className="grid gap-4 md:grid-cols-2">
       {list.map((o) => {
-        const next = NEXT_STATUS[o.status] ?? [];
         const r = restaurants[o.restaurant_id];
         const restMaps = r?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.address)}` : null;
         const custMaps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customer_address)}`;
+        const isPending = o.status === "pending";
+        // 2 min from order creation (assignment proxy)
+        const acceptDeadline = new Date(o.created_at).getTime() + 2 * 60 * 1000;
+        // 15 min from accepted_at to pickup
+        const pickupDeadline = o.accepted_at ? new Date(o.accepted_at).getTime() + 15 * 60 * 1000 : null;
+        const next = NEXT_STATUS[o.status] ?? [];
+
         return (
           <Card key={o.id} className="p-5 shadow-soft neon-border">
             <div className="flex items-start justify-between">
@@ -178,33 +216,44 @@ function Body() {
               <Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge>
             </div>
 
-            {/* Restaurant section */}
+            {/* Timers */}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {isPending && <Countdown deadline={acceptDeadline} label="للقبول" />}
+              {o.status === "accepted" && pickupDeadline && <Countdown deadline={pickupDeadline} label="للاستلام" />}
+            </div>
+
+            {/* Restaurant */}
             <div className="mt-3 rounded-lg bg-accent/10 border border-accent/30 p-3 space-y-2">
               <div className="flex items-center gap-2">
                 <Store className="h-4 w-4 text-accent" />
                 <span className="font-bold neon-text-accent">{r?.name ?? "المطعم"}</span>
               </div>
-              {r?.address && (
-                <a href={restMaps!} target="_blank" rel="noreferrer" className="flex items-start gap-2 text-sm text-accent hover:underline">
-                  <MapPin className="h-4 w-4 mt-0.5" /><span>{r.address}</span>
-                </a>
-              )}
-              {r?.phone && (
-                <Button asChild size="sm" variant="outline" className="h-7">
-                  <a href={`tel:${r.phone}`} dir="ltr"><Phone className="ml-1 h-3 w-3" />اتصال بالمطعم</a>
-                </Button>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {restMaps && (
+                  <Button asChild size="sm" variant="outline" className="h-7">
+                    <a href={restMaps} target="_blank" rel="noreferrer"><MapPin className="ml-1 h-3.5 w-3.5" />موقع المطعم</a>
+                  </Button>
+                )}
+                {r?.phone && (
+                  <Button asChild size="sm" variant="outline" className="h-7">
+                    <a href={`tel:${r.phone}`} dir="ltr"><Phone className="ml-1 h-3 w-3" />اتصال</a>
+                  </Button>
+                )}
+              </div>
+              {r?.address && <div className="text-xs text-muted-foreground">{r.address}</div>}
             </div>
 
-            {/* Customer section */}
+            {/* Customer */}
             <div className="mt-3 rounded-lg bg-primary/10 border border-primary/30 p-3 space-y-2">
               <div className="font-bold neon-text">{o.customer_name}</div>
               <div className="flex items-center gap-2 flex-wrap">
                 <Button asChild size="sm" variant="outline" className="h-8">
                   <a href={`tel:${o.customer_phone}`} dir="ltr"><Phone className="ml-1 h-3.5 w-3.5" />اتصال</a>
                 </Button>
-                <Button asChild size="sm" variant="outline" className="h-8">
-                  <a href={`sms:${o.customer_phone}`} dir="ltr"><MessagesSquare className="ml-1 h-3.5 w-3.5" />SMS</a>
+                <Button asChild size="sm" variant="outline" className="h-8 border-success/50 text-success hover:bg-success/10">
+                  <a href={waLink(o.customer_phone)} target="_blank" rel="noreferrer" dir="ltr">
+                    <MessagesSquare className="ml-1 h-3.5 w-3.5" />WhatsApp
+                  </a>
                 </Button>
                 <span className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</span>
               </div>
@@ -220,11 +269,23 @@ function Body() {
               </div>
             )}
 
-            <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-sm">
-              <span className="text-muted-foreground">المبلغ المستحق</span>
-              <span className="font-bold neon-text">{Number(o.total).toFixed(2)}</span>
+            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-sm">
+              <div className="rounded bg-muted/40 p-2 text-center">
+                <div className="text-[10px] text-muted-foreground">سعر التوصيل</div>
+                <div className="font-bold text-accent">{Number(o.delivery_price).toFixed(2)}</div>
+              </div>
+              <div className="rounded bg-muted/40 p-2 text-center">
+                <div className="text-[10px] text-muted-foreground">المبلغ المستحق على العميل</div>
+                <div className="font-bold neon-text">{Number(o.total).toFixed(2)}</div>
+              </div>
             </div>
-            {next.length > 0 && (
+
+            {/* Actions */}
+            {isPending ? (
+              <Button className="mt-3 w-full bg-gradient-primary shadow-pop" onClick={() => acceptOrder(o.id)}>
+                <CheckCircle2 className="ml-2 h-4 w-4" /> قبول الطلب
+              </Button>
+            ) : next.length > 0 ? (
               <div className="mt-3">
                 <Select onValueChange={(v) => updateStatus(o.id, v)}>
                   <SelectTrigger><SelectValue placeholder="تحديث الحالة…" /></SelectTrigger>
@@ -233,7 +294,7 @@ function Body() {
                   </SelectContent>
                 </Select>
               </div>
-            )}
+            ) : null}
           </Card>
         );
       })}
@@ -244,70 +305,76 @@ function Body() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-cool p-6 shadow-pop">
-        <div>
-          <h1 className="text-3xl font-extrabold neon-text">طلباتي</h1>
-          <p className="mt-1 text-sm opacity-90">{isOnline ? "موقعك يُبث مباشرة للأدمن والمطاعم" : "فعّل الاتصال لبدء استقبال الطلبات"}</p>
-        </div>
-        <div className="flex items-center gap-3 rounded-xl bg-background/30 backdrop-blur px-4 py-2">
-          <span className={`h-3 w-3 rounded-full ${isOnline ? "bg-success animate-pulse" : "bg-muted-foreground/40"}`} />
-          <span className="text-sm font-semibold">{isOnline ? "متصل" : "غير متصل"}</span>
-          <Switch checked={isOnline} onCheckedChange={toggleOnline} />
-        </div>
-      </div>
+    <DashboardLayout title="مندوب" items={navItems}>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsContent value="dashboard" className="mt-0 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-cool p-5 shadow-pop">
+            <div>
+              <h1 className="text-2xl font-extrabold neon-text">طلباتي</h1>
+              <p className="mt-1 text-xs opacity-90">{isOnline ? "موقعك يُبث مباشرة" : "فعّل الاتصال لبدء استقبال الطلبات"}</p>
+            </div>
+            <div className="flex items-center gap-2 rounded-xl bg-background/30 backdrop-blur px-3 py-1.5">
+              <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? "bg-success animate-pulse" : "bg-muted-foreground/40"}`} />
+              <span className="text-xs font-semibold">{isOnline ? "متصل" : "غير متصل"}</span>
+              <Switch checked={isOnline} onCheckedChange={toggleOnline} />
+            </div>
+          </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[
-          { label: "نشط", value: totals.active, cls: "bg-gradient-primary" },
-          { label: "تم التوصيل", value: totals.delivered, cls: "bg-gradient-success" },
-          { label: "الأرباح", value: totals.earnings.toFixed(2), cls: "bg-gradient-warm" },
-        ].map((c) => (
-          <Card key={c.label} className={`${c.cls} p-5 border-0 shadow-pop`}>
-            <div className="text-xs uppercase tracking-wider opacity-90">{c.label}</div>
-            <div className="mt-2 text-3xl font-extrabold">{c.value}</div>
-          </Card>
-        ))}
-      </div>
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+            <Card className="bg-gradient-primary p-4 border-0 shadow-pop">
+              <div className="text-[10px] uppercase opacity-90">نشطة</div>
+              <div className="text-2xl font-extrabold">{totals.active}</div>
+            </Card>
+            <Card className="bg-gradient-success p-4 border-0 shadow-pop">
+              <div className="text-[10px] uppercase opacity-90">تم التوصيل</div>
+              <div className="text-2xl font-extrabold">{totals.delivered}</div>
+            </Card>
+            <Card className="bg-gradient-warm p-4 border-0 shadow-pop">
+              <div className="text-[10px] uppercase opacity-90">عمولتي %</div>
+              <div className="text-2xl font-extrabold">{commission}%</div>
+            </Card>
+            <Card className="bg-gradient-warm p-4 border-0 shadow-pop">
+              <div className="text-[10px] uppercase opacity-90">أرباحي</div>
+              <div className="text-2xl font-extrabold">{totals.earnings.toFixed(2)}</div>
+            </Card>
+          </div>
 
-      <Tabs defaultValue="orders">
-        <TabsList className="bg-card p-1 shadow-soft rounded-xl">
-          <TabsTrigger value="orders"><LayoutDashboard className="ml-2 h-4 w-4" />الطلبات</TabsTrigger>
-          <TabsTrigger value="map"><MapIcon className="ml-2 h-4 w-4" />موقعي</TabsTrigger>
-          <TabsTrigger value="complaints"><AlertTriangle className="ml-2 h-4 w-4" />الشكاوى</TabsTrigger>
-          <TabsTrigger value="chat"><MessagesSquare className="ml-2 h-4 w-4" />المحادثات</TabsTrigger>
-        </TabsList>
+          <div>
+            <h2 className="mb-3 text-lg font-bold neon-text">الطلبات النشطة</h2>
+            {renderOrders(grouped.active)}
+          </div>
 
-        <TabsContent value="orders" className="mt-4">
-          <Tabs defaultValue="active">
-            <TabsList className="bg-card p-1 shadow-soft rounded-xl">
-              <TabsTrigger value="active">نشطة ({grouped.active.length})</TabsTrigger>
-              <TabsTrigger value="done">مكتملة ({grouped.done.length})</TabsTrigger>
-              <TabsTrigger value="failed">ملغاة/مرتجعة ({grouped.failed.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="active" className="mt-4">{renderOrders(grouped.active)}</TabsContent>
-            <TabsContent value="done" className="mt-4">{renderOrders(grouped.done)}</TabsContent>
-            <TabsContent value="failed" className="mt-4">{renderOrders(grouped.failed)}</TabsContent>
-          </Tabs>
+          {(grouped.done.length > 0 || grouped.failed.length > 0) && (
+            <>
+              <h2 className="mb-3 mt-6 text-lg font-bold text-muted-foreground">مكتملة ({grouped.done.length})</h2>
+              {renderOrders(grouped.done)}
+              {grouped.failed.length > 0 && (
+                <>
+                  <h2 className="mb-3 mt-6 text-lg font-bold text-muted-foreground">ملغاة/مرتجعة ({grouped.failed.length})</h2>
+                  {renderOrders(grouped.failed)}
+                </>
+              )}
+            </>
+          )}
         </TabsContent>
 
-        <TabsContent value="map" className="mt-4">
+        <TabsContent value="map" className="mt-0">
           <Card className="p-3">
             <div className="mb-2 text-sm text-muted-foreground">
-              {isOnline ? "موقعك يُحدَّث تلقائيًا. يراك الأدمن والمطعم على خريطتهم." : "فعّل وضع الاتصال لبدء بث موقعك."}
+              {isOnline ? "موقعك يُحدَّث تلقائيًا." : "فعّل وضع الاتصال لبث موقعك."}
             </div>
             <DriversMap drivers={mapDrivers} />
           </Card>
         </TabsContent>
 
-        <TabsContent value="complaints" className="mt-4">
+        <TabsContent value="complaints" className="mt-0">
           <ComplaintsList mode="driver" driverId={driverId} />
         </TabsContent>
 
-        <TabsContent value="chat" className="mt-4">
+        <TabsContent value="chat" className="mt-0">
           <ChatPanel />
         </TabsContent>
       </Tabs>
-    </div>
+    </DashboardLayout>
   );
 }
