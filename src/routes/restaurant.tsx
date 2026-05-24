@@ -22,14 +22,12 @@ export const Route = createFileRoute("/restaurant")({
   component: RestaurantPage,
 });
 
-const navItems: NavItem[] = [{ to: "/restaurant", label: "الطلبات", icon: LayoutDashboard }];
-
 interface City { id: string; name: string; delivery_price: number }
 interface Product { id: string; name: string; price: number; is_active: boolean }
 interface Order {
   id: string; order_number: string; daily_number: number | null; customer_name: string; customer_phone: string;
   customer_address: string; items_total: number; delivery_price: number; total: number;
-  status: string; driver_id: string | null; created_at: string; notes: string | null;
+  status: string; driver_id: string | null; created_at: string; notes: string | null; city_id: string | null;
 }
 
 function RestaurantPage() {
@@ -37,11 +35,7 @@ function RestaurantPage() {
   if (loading) return <div className="flex min-h-screen items-center justify-center"><Truck className="h-8 w-8 animate-pulse text-primary" /></div>;
   if (!user) return <Navigate to="/login" />;
   if (!roles.includes("restaurant")) return <Navigate to="/" />;
-  return (
-    <DashboardLayout title="مطعم" items={navItems}>
-      <Body />
-    </DashboardLayout>
-  );
+  return <Body />;
 }
 
 function Body() {
