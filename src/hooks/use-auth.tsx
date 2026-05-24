@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { initOneSignal, osLogin, osLogout } from "@/lib/onesignal";
@@ -20,6 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const lastUserId = useRef<string | null>(null);
 
   const loadRoles = async (userId: string) => {
     const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -27,26 +28,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    initOneSignal();
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-      if (s?.user) {
-        osLogin(s.user.id);
-        setTimeout(() => loadRoles(s.user.id), 0);
-      } else {
-        osLogout();
-        setRoles([]);
-      }
-    });
-    supabase.auth.getSession().then(async ({ data }) => {
+    let mounted = true;
+    try { initOneSignal(); } catch (e) { console.warn("OneSignal init failed", e); }
+
+    // 1) Restore session first (await both session + roles before clearing loading)
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
       setSession(data.session);
       if (data.session?.user) {
-        osLogin(data.session.user.id);
+        lastUserId.current = data.session.user.id;
+        try { osLogin(data.session.user.id); } catch { /* noop */ }
         await loadRoles(data.session.user.id);
       }
       setLoading(false);
+    })();
+
+    // 2) Listen for FUTURE auth changes only (sign in / sign out / token refresh)
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      // Ignore the initial session event — getSession() handles it above.
+      if (event === "INITIAL_SESSION") return;
+      // Token refresh keeps the same user; don't reset roles or loading
+      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        setSession(s);
+        return;
+      }
+      setSession(s);
+      if (s?.user) {
+        if (lastUserId.current !== s.user.id) {
+          lastUserId.current = s.user.id;
+          try { osLogin(s.user.id); } catch { /* noop */ }
+          loadRoles(s.user.id);
+        }
+      } else {
+        lastUserId.current = null;
+        try { osLogout(); } catch { /* noop */ }
+        setRoles([]);
+      }
     });
-    return () => sub.subscription.unsubscribe();
+
+    return () => { mounted = false; sub.subscription.unsubscribe(); };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -54,9 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
+  const signOut = async () => { await supabase.auth.signOut(); };
 
   return (
     <AuthCtx.Provider value={{ user: session?.user ?? null, session, roles, loading, signIn, signOut }}>
