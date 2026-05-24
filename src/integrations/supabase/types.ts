@@ -156,6 +156,7 @@ export type Database = {
       drivers: {
         Row: {
           city_id: string | null
+          commission_rate: number
           created_at: string
           current_lat: number | null
           current_lng: number | null
@@ -170,6 +171,7 @@ export type Database = {
         }
         Insert: {
           city_id?: string | null
+          commission_rate?: number
           created_at?: string
           current_lat?: number | null
           current_lng?: number | null
@@ -184,6 +186,7 @@ export type Database = {
         }
         Update: {
           city_id?: string | null
+          commission_rate?: number
           created_at?: string
           current_lat?: number | null
           current_lng?: number | null
@@ -297,6 +300,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          accepted_at: string | null
           city_id: string | null
           created_at: string
           customer_address: string
@@ -317,6 +321,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          accepted_at?: string | null
           city_id?: string | null
           created_at?: string
           customer_address: string
@@ -337,6 +342,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          accepted_at?: string | null
           city_id?: string | null
           created_at?: string
           customer_address?: string
