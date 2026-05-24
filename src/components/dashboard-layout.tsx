@@ -1,115 +1,96 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { LogOut, Menu } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { NotificationBell } from "@/components/notification-bell";
 
 export interface NavItem {
-  to: string;
+  to?: string;
   label: string;
   icon: LucideIcon;
+  onSelect?: () => void;
 }
 
 interface Props {
   title: string;
   items: NavItem[];
   children: ReactNode;
+  showBell?: boolean;
 }
 
 const ROLE_AR: Record<string, string> = { admin: "مسؤول", restaurant: "مطعم", driver: "مندوب" };
 
-export function DashboardLayout({ title, items, children }: Props) {
+export function DashboardLayout({ title, items, children, showBell = true }: Props) {
   const { user, signOut, roles } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate({ to: "/login" });
-  };
+  const handleSignOut = async () => { await signOut(); navigate({ to: "/login" }); };
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
-      {/* Sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-l border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
-        <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-primary text-primary-foreground font-extrabold shadow-pop neon-text">
-            R&amp;O
-          </div>
-          <div>
-            <div className="text-sm font-semibold neon-text">R&amp;O</div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{title}</div>
-          </div>
+    <div className="flex min-h-screen w-full flex-col bg-background">
+      <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b border-border bg-background/80 px-4 backdrop-blur">
+        <div className="flex items-center gap-2">
+          <Sheet open={open} onOpenChange={setOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="القائمة"><Menu className="h-5 w-5" /></Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-72 p-0 bg-sidebar text-sidebar-foreground border-l border-sidebar-border">
+              <SheetHeader className="border-b border-sidebar-border p-4">
+                <SheetTitle className="flex items-center gap-2 text-right">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-primary text-primary-foreground font-extrabold shadow-pop neon-text">R&amp;O</span>
+                  <span className="neon-text">R&amp;O · {title}</span>
+                </SheetTitle>
+              </SheetHeader>
+              <nav className="flex flex-col gap-1 p-3">
+                {items.map((item) => {
+                  const Icon = item.icon;
+                  const active = item.to ? pathname === item.to : false;
+                  const cls = `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-right transition-colors ${
+                    active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50"
+                  }`;
+                  if (item.onSelect) {
+                    return (
+                      <button key={item.label} className={cls} onClick={() => { item.onSelect!(); setOpen(false); }}>
+                        <Icon className="h-4 w-4" /> {item.label}
+                      </button>
+                    );
+                  }
+                  return (
+                    <Link key={item.to} to={item.to!} className={cls} onClick={() => setOpen(false)}>
+                      <Icon className="h-4 w-4" /> {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+              <div className="mt-auto border-t border-sidebar-border p-3">
+                <div className="mb-2 truncate px-2 text-xs text-muted-foreground" dir="ltr">{user?.email}</div>
+                <div className="mb-2 flex flex-wrap gap-1 px-2">
+                  {roles.map((r) => (
+                    <span key={r} className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] uppercase text-primary">{ROLE_AR[r] ?? r}</span>
+                  ))}
+                </div>
+                <Button variant="ghost" size="sm" className="w-full justify-start" onClick={handleSignOut}>
+                  <LogOut className="ml-2 h-4 w-4" /> تسجيل الخروج
+                </Button>
+              </div>
+            </SheetContent>
+          </Sheet>
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded bg-gradient-primary text-primary-foreground text-xs font-extrabold shadow-pop">R&amp;O</span>
+          <span className="font-semibold neon-text">R&amp;O</span>
+          <span className="text-xs text-muted-foreground">· {title}</span>
         </div>
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          {items.map((item) => {
-            const active = pathname === item.to;
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="border-t border-sidebar-border p-3">
-          <div className="mb-2 truncate px-2 text-xs text-muted-foreground" dir="ltr">{user?.email}</div>
-          <div className="mb-2 flex flex-wrap gap-1 px-2">
-            {roles.map((r) => (
-              <span key={r} className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] uppercase text-primary">{ROLE_AR[r] ?? r}</span>
-            ))}
-          </div>
-          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={handleSignOut}>
-            <LogOut className="ml-2 h-4 w-4" /> تسجيل الخروج
-          </Button>
+        <div className="flex items-center gap-1">
+          {showBell && <NotificationBell />}
+          <Button variant="ghost" size="icon" onClick={handleSignOut} aria-label="تسجيل الخروج"><LogOut className="h-4 w-4" /></Button>
         </div>
-      </aside>
+      </header>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur">
-          <div className="flex items-center gap-2 md:hidden">
-            <span className="flex h-7 w-7 items-center justify-center rounded bg-gradient-primary text-primary-foreground text-xs font-extrabold shadow-pop">R&amp;O</span>
-            <span className="font-semibold neon-text">R&amp;O</span>
-            <span className="text-xs text-muted-foreground">· {title}</span>
-          </div>
-          <div className="hidden text-sm text-muted-foreground md:block">{title}</div>
-          <div className="flex items-center gap-1">
-            <NotificationBell />
-            <Button variant="ghost" size="icon" onClick={handleSignOut} className="md:hidden"><LogOut className="h-4 w-4" /></Button>
-          </div>
-        </header>
-        <nav className="fixed bottom-0 left-0 right-0 z-10 flex border-t border-border bg-background md:hidden">
-          {items.slice(0, 5).map((item) => {
-            const active = pathname === item.to;
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={`flex flex-1 flex-col items-center gap-1 py-2 text-[10px] ${
-                  active ? "text-primary" : "text-muted-foreground"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <main className="flex-1 overflow-auto px-4 py-6 pb-20 md:px-8 md:pb-6">{children}</main>
-      </div>
+      <main className="flex-1 overflow-auto px-4 py-6 md:px-8">{children}</main>
     </div>
   );
 }
