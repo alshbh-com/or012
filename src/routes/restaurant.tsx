@@ -190,7 +190,7 @@ function Body() {
 
 type DriverInfoMap = Record<string, { name: string; phone: string | null; user_id: string }>;
 
-function OrdersByStatus({ orders, driverInfo, setChatTarget }: { orders: Order[]; driverInfo: DriverInfoMap; setChatTarget: (id: string) => void }) {
+function OrdersByStatus({ orders, driverInfo }: { orders: Order[]; driverInfo: DriverInfoMap }) {
   const groups = {
     active: orders.filter((o) => statusGroup(o.status) === "active"),
     done: orders.filter((o) => statusGroup(o.status) === "done"),
@@ -206,7 +206,10 @@ function OrdersByStatus({ orders, driverInfo, setChatTarget }: { orders: Order[]
       <Table>
         <TableHeader><TableRow>
           <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>العنوان</TableHead>
-          <TableHead>المندوب</TableHead><TableHead>الإجمالي</TableHead><TableHead>الحالة</TableHead>
+          <TableHead>المندوب</TableHead>
+          <TableHead>التوصيل</TableHead>
+          <TableHead>الإجمالي</TableHead>
+          <TableHead>الحالة</TableHead>
           {showPreparingBtn && <TableHead>إجراء</TableHead>}
         </TableRow></TableHeader>
         <TableBody>
@@ -225,20 +228,15 @@ function OrdersByStatus({ orders, driverInfo, setChatTarget }: { orders: Order[]
                   {info ? (
                     <div className="space-y-1">
                       <div className="text-sm font-medium">{info.name}</div>
-                      <div className="flex gap-1">
-                        {info.phone && (
-                          <Button asChild size="sm" variant="outline" className="h-7 px-2 text-xs">
-                            <a href={`tel:${info.phone}`}>اتصال</a>
-                          </Button>
-                        )}
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                          onClick={() => setChatTarget(info.user_id)}>
-                          رسالة
+                      {info.phone && (
+                        <Button asChild size="sm" variant="outline" className="h-7 px-2 text-xs">
+                          <a href={`tel:${info.phone}`}>اتصال</a>
                         </Button>
-                      </div>
+                      )}
                     </div>
                   ) : <span className="text-xs text-muted-foreground">— لم يُعيَّن</span>}
                 </TableCell>
+                <TableCell className="font-semibold text-accent">{Number(o.delivery_price).toFixed(2)}</TableCell>
                 <TableCell className="font-semibold">{Number(o.total).toFixed(2)}</TableCell>
                 <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
                 {showPreparingBtn && (
@@ -253,7 +251,7 @@ function OrdersByStatus({ orders, driverInfo, setChatTarget }: { orders: Order[]
               </TableRow>
             );
           })}
-          {list.length === 0 && <TableRow><TableCell colSpan={showPreparingBtn ? 7 : 6} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
+          {list.length === 0 && <TableRow><TableCell colSpan={showPreparingBtn ? 8 : 7} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
         </TableBody>
       </Table>
     </Card>
