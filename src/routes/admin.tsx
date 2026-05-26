@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -30,9 +30,7 @@ import { downloadCSV } from "@/lib/export";
 
 export const Route = createFileRoute("/admin")({ component: AdminPage });
 
-const navItems: NavItem[] = [
-  { to: "/admin", label: "اللوحة", icon: LayoutDashboard },
-];
+/* navItems built inside AdminContent (state-driven) */
 
 interface City { id: string; name: string; delivery_price: number; is_active: boolean }
 interface Restaurant { id: string; name: string; phone: string | null; city_id: string | null; is_active: boolean; user_id: string; address: string | null }
@@ -54,15 +52,12 @@ function AdminPage() {
   if (authLoading) return <div className="flex min-h-screen items-center justify-center"><Truck className="h-8 w-8 animate-pulse text-primary" /></div>;
   if (!user) return <Navigate to="/login" />;
   if (!roles.includes("admin")) return <Navigate to="/" />;
-  return (
-    <DashboardLayout title="مسؤول" items={navItems}>
-      <AdminContent />
-    </DashboardLayout>
-  );
+  return <AdminContent />;
 }
 
 function AdminContent() {
   useNotificationPermission();
+  const [tab, setTab] = useState<string>("dashboard");
   useEffect(() => {
     const ch = supabase.channel("admin-new-orders")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (p) => {
@@ -73,40 +68,82 @@ function AdminContent() {
     return () => { ch.unsubscribe(); };
   }, []);
 
+  const navItems: NavItem[] = [
+    { label: "اللوحة", icon: LayoutDashboard, onSelect: () => setTab("dashboard") },
+    { label: "الطلبات", icon: Package, onSelect: () => setTab("orders") },
+    { label: "طلبات غير معينة", icon: AlertTriangle, onSelect: () => setTab("unassigned") },
+    { label: "حالة المندوبين", icon: Truck, onSelect: () => setTab("drivers-status") },
+    { label: "الحسابات", icon: LayoutDashboard, onSelect: () => setTab("accounts") },
+    { label: "التقارير", icon: LayoutDashboard, onSelect: () => setTab("reports") },
+    { label: "التتبع على الخريطة", icon: MapIcon, onSelect: () => setTab("map") },
+    { label: "المحادثات", icon: MessagesSquare, onSelect: () => setTab("chat") },
+    { label: "المدن", icon: MapPin, onSelect: () => setTab("cities") },
+    { label: "المطاعم", icon: Users, onSelect: () => setTab("restaurants") },
+    { label: "المندوبين", icon: Truck, onSelect: () => setTab("drivers") },
+    { label: "الشكاوى", icon: AlertTriangle, onSelect: () => setTab("complaints") },
+    { label: "الإعدادات", icon: SettingsIcon, onSelect: () => setTab("settings") },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-primary p-6 shadow-pop">
-        <h1 className="text-3xl font-extrabold tracking-tight">لوحة الأدمن</h1>
-        <p className="mt-1 text-sm opacity-90">إدارة شاملة للنظام والطلبات والحسابات.</p>
-      </div>
-      <Tabs defaultValue="orders">
-        <TabsList className="flex flex-wrap h-auto bg-card p-1 shadow-soft rounded-xl">
-          <TabsTrigger value="orders"><Package className="ml-2 h-4 w-4" />الطلبات</TabsTrigger>
-          <TabsTrigger value="unassigned"><AlertTriangle className="ml-2 h-4 w-4" />غير معينة</TabsTrigger>
-          <TabsTrigger value="drivers-status"><Truck className="ml-2 h-4 w-4" />حالة المندوبين</TabsTrigger>
-          <TabsTrigger value="accounts"><LayoutDashboard className="ml-2 h-4 w-4" />الحسابات</TabsTrigger>
-          <TabsTrigger value="reports"><LayoutDashboard className="ml-2 h-4 w-4" />التقارير</TabsTrigger>
-          <TabsTrigger value="map"><MapIcon className="ml-2 h-4 w-4" />التتبع</TabsTrigger>
-          <TabsTrigger value="chat"><MessagesSquare className="ml-2 h-4 w-4" />المحادثات</TabsTrigger>
-          <TabsTrigger value="cities"><MapPin className="ml-2 h-4 w-4" />المدن</TabsTrigger>
-          <TabsTrigger value="restaurants"><Users className="ml-2 h-4 w-4" />المطاعم</TabsTrigger>
-          <TabsTrigger value="drivers"><Truck className="ml-2 h-4 w-4" />المندوبين</TabsTrigger>
-          <TabsTrigger value="complaints"><AlertTriangle className="ml-2 h-4 w-4" />الشكاوى</TabsTrigger>
-          <TabsTrigger value="settings"><SettingsIcon className="ml-2 h-4 w-4" />الإعدادات</TabsTrigger>
-        </TabsList>
-        <TabsContent value="orders" className="mt-4"><OrdersTab /></TabsContent>
-        <TabsContent value="unassigned" className="mt-4"><UnassignedTab /></TabsContent>
-        <TabsContent value="drivers-status" className="mt-4"><DriversStatusTab /></TabsContent>
-        <TabsContent value="accounts" className="mt-4"><AccountsTab /></TabsContent>
-        <TabsContent value="reports" className="mt-4"><ReportsTab /></TabsContent>
-        <TabsContent value="map" className="mt-4"><MapTab /></TabsContent>
-        <TabsContent value="chat" className="mt-4"><ChatPanel /></TabsContent>
-        <TabsContent value="cities" className="mt-4"><CitiesTab /></TabsContent>
-        <TabsContent value="restaurants" className="mt-4"><RestaurantsTab /></TabsContent>
-        <TabsContent value="drivers" className="mt-4"><DriversTab /></TabsContent>
-        <TabsContent value="complaints" className="mt-4"><ComplaintsList mode="admin" /></TabsContent>
-        <TabsContent value="settings" className="mt-4"><SettingsTab /></TabsContent>
+    <DashboardLayout title="مسؤول" items={navItems}>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsContent value="dashboard" className="mt-0"><DashboardHome onOpen={setTab} /></TabsContent>
+        <TabsContent value="orders" className="mt-0"><OrdersTab /></TabsContent>
+        <TabsContent value="unassigned" className="mt-0"><UnassignedTab /></TabsContent>
+        <TabsContent value="drivers-status" className="mt-0"><DriversStatusTab /></TabsContent>
+        <TabsContent value="accounts" className="mt-0"><AccountsTab /></TabsContent>
+        <TabsContent value="reports" className="mt-0"><ReportsTab /></TabsContent>
+        <TabsContent value="map" className="mt-0"><MapTab /></TabsContent>
+        <TabsContent value="chat" className="mt-0"><ChatPanel /></TabsContent>
+        <TabsContent value="cities" className="mt-0"><CitiesTab /></TabsContent>
+        <TabsContent value="restaurants" className="mt-0"><RestaurantsTab /></TabsContent>
+        <TabsContent value="drivers" className="mt-0"><DriversTab /></TabsContent>
+        <TabsContent value="complaints" className="mt-0"><ComplaintsList mode="admin" /></TabsContent>
+        <TabsContent value="settings" className="mt-0"><SettingsTab /></TabsContent>
       </Tabs>
+    </DashboardLayout>
+  );
+}
+
+function DashboardHome({ onOpen }: { onOpen: (t: string) => void }) {
+  const [stats, setStats] = useState({ active: 0, today: 0, driversOnline: 0, restaurants: 0, unassigned: 0 });
+  useEffect(() => {
+    const load = async () => {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const [{ data: ords }, { data: drs }, { data: rs }] = await Promise.all([
+        supabase.from("orders").select("status, driver_id, created_at"),
+        supabase.from("drivers").select("is_online"),
+        supabase.from("restaurants").select("id"),
+      ]);
+      const orders = (ords ?? []) as { status: string; driver_id: string | null; created_at: string }[];
+      setStats({
+        active: orders.filter((o) => statusGroup(o.status) === "active").length,
+        today: orders.filter((o) => new Date(o.created_at) >= today).length,
+        unassigned: orders.filter((o) => !o.driver_id && statusGroup(o.status) === "active").length,
+        driversOnline: (drs ?? []).filter((d) => d.is_online).length,
+        restaurants: (rs ?? []).length,
+      });
+    };
+    load();
+    const ch = supabase.channel("admin-home")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "drivers" }, load)
+      .subscribe();
+    return () => { ch.unsubscribe(); };
+  }, []);
+  const Tile = ({ label, value, onClick, gradient }: { label: string; value: number | string; onClick: () => void; gradient: string }) => (
+    <button onClick={onClick} className={`text-right rounded-xl ${gradient} p-4 shadow-pop border-0 text-white transition hover:scale-[1.02] active:scale-95`}>
+      <div className="text-[10px] uppercase opacity-90">{label}</div>
+      <div className="text-2xl font-extrabold">{value}</div>
+    </button>
+  );
+  return (
+    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
+      <Tile label="الطلبات النشطة" value={stats.active} onClick={() => onOpen("orders")} gradient="bg-gradient-primary" />
+      <Tile label="طلبات اليوم" value={stats.today} onClick={() => onOpen("orders")} gradient="bg-gradient-cool" />
+      <Tile label="غير معينة" value={stats.unassigned} onClick={() => onOpen("unassigned")} gradient="bg-gradient-warm" />
+      <Tile label="مندوبين متصلين" value={stats.driversOnline} onClick={() => onOpen("drivers-status")} gradient="bg-gradient-success" />
+      <Tile label="المطاعم" value={stats.restaurants} onClick={() => onOpen("restaurants")} gradient="bg-gradient-primary" />
     </div>
   );
 }
