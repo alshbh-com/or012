@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { LayoutDashboard, Plus, Truck, Loader2, UtensilsCrossed, Trash2, X } from "lucide-react";
+import { LayoutDashboard, Plus, Truck, Loader2, UtensilsCrossed, Trash2, X, Package } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
 import { useNotificationPermission, notify } from "@/lib/notifications";
@@ -119,6 +119,7 @@ function Body() {
 
   const navItems: NavItem[] = [
     { label: "اللوحة", icon: LayoutDashboard, onSelect: () => setActiveTab("dashboard") },
+    { label: "الطلبات", icon: Package, onSelect: () => setActiveTab("orders") },
     { label: "القائمة (المنتجات)", icon: UtensilsCrossed, onSelect: () => setActiveTab("products") },
   ];
 
@@ -149,12 +150,14 @@ function Body() {
           </div>
 
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+            <button onClick={() => setActiveTab("orders")} className="text-right bg-gradient-cool p-4 rounded-xl border-0 shadow-pop text-white"><div className="text-[10px] uppercase opacity-90">نشطة الآن</div><div className="text-2xl font-extrabold">{totals.active}</div></button>
             <Card className="bg-gradient-primary p-4 border-0 shadow-pop text-white"><div className="text-[10px] uppercase opacity-90">طلبات اليوم</div><div className="text-2xl font-extrabold">{totals.today}</div></Card>
-            <Card className="bg-gradient-cool p-4 border-0 shadow-pop text-white"><div className="text-[10px] uppercase opacity-90">نشطة الآن</div><div className="text-2xl font-extrabold">{totals.active}</div></Card>
             <Card className="bg-gradient-success p-4 border-0 shadow-pop text-white"><div className="text-[10px] uppercase opacity-90">تم التوصيل</div><div className="text-2xl font-extrabold">{totals.delivered}</div></Card>
             <Card className="bg-card p-4 shadow-soft"><div className="text-[10px] uppercase text-muted-foreground">إجمالي الطلبات</div><div className="text-2xl font-extrabold neon-text">{orders.length}</div></Card>
           </div>
+        </TabsContent>
 
+        <TabsContent value="orders" className="mt-0 space-y-5">
           {/* Filters */}
           <Card className="p-3 shadow-soft">
             <div className="grid gap-2 sm:grid-cols-4">
