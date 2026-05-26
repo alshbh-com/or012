@@ -174,6 +174,7 @@ function Body() {
 
   const navItems: NavItem[] = [
     { label: "اللوحة", icon: LayoutDashboard, onSelect: () => setTab("dashboard") },
+    { label: "طلباتي", icon: Truck, onSelect: () => setTab("orders") },
     { label: "موقعي", icon: MapIcon, onSelect: () => setTab("map") },
     { label: "الشكاوى", icon: AlertTriangle, onSelect: () => setTab("complaints") },
     { label: "المحادثات", icon: MessagesSquare, onSelect: () => setTab("chat") },
@@ -310,7 +311,7 @@ function Body() {
         <TabsContent value="dashboard" className="mt-0 space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-cool p-5 shadow-pop">
             <div>
-              <h1 className="text-2xl font-extrabold neon-text">طلباتي</h1>
+              <h1 className="text-2xl font-extrabold neon-text">لوحة المندوب</h1>
               <p className="mt-1 text-xs opacity-90">{isOnline ? "موقعك يُبث مباشرة" : "فعّل الاتصال لبدء استقبال الطلبات"}</p>
             </div>
             <div className="flex items-center gap-2 rounded-xl bg-background/30 backdrop-blur px-3 py-1.5">
@@ -321,10 +322,10 @@ function Body() {
           </div>
 
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-            <Card className="bg-gradient-primary p-4 border-0 shadow-pop">
+            <button onClick={() => setTab("orders")} className="text-right bg-gradient-primary p-4 rounded-xl border-0 shadow-pop">
               <div className="text-[10px] uppercase opacity-90">نشطة</div>
               <div className="text-2xl font-extrabold">{totals.active}</div>
-            </Card>
+            </button>
             <Card className="bg-gradient-success p-4 border-0 shadow-pop">
               <div className="text-[10px] uppercase opacity-90">تم التوصيل</div>
               <div className="text-2xl font-extrabold">{totals.delivered}</div>
@@ -338,7 +339,9 @@ function Body() {
               <div className="text-2xl font-extrabold">{totals.earnings.toFixed(2)}</div>
             </Card>
           </div>
+        </TabsContent>
 
+        <TabsContent value="orders" className="mt-0 space-y-5">
           <div>
             <h2 className="mb-3 text-lg font-bold neon-text">الطلبات النشطة</h2>
             {renderOrders(grouped.active)}
