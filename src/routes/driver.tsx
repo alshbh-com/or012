@@ -396,3 +396,41 @@ function Body() {
     </DashboardLayout>
   );
 }
+
+function DriverReports({ driverId, commission }: { driverId: string; commission: number }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  const [from, setFrom] = useState(weekAgo);
+  const [to, setTo] = useState(today);
+  const [rows, setRows] = useState<Array<{ id: string; order_number: string; delivery_price: number; total: number; status: string; created_at: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const apply = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("orders").select("id, order_number, delivery_price, total, status, created_at")
+      .eq("driver_id", driverId).eq("status", "delivered")
+      .gte("created_at", from + "T00:00:00").lte("created_at", to + "T23:59:59")
+      .order("created_at", { ascending: false });
+    setRows(data ?? []);
+    setLoading(false);
+  };
+  const delivered = rows.length;
+  const fees = rows.reduce((s, r) => s + Number(r.delivery_price ?? 0), 0);
+  const earnings = fees * (commission / 100);
+  return (
+    <div className="space-y-4">
+      <Card className="p-5 shadow-soft">
+        <div className="mb-3 text-lg font-bold neon-text">تقريري</div>
+        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <div><Label className="text-xs">من تاريخ</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} dir="ltr" /></div>
+          <div><Label className="text-xs">إلى تاريخ</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} dir="ltr" /></div>
+          <div className="flex items-end"><Button onClick={apply} disabled={loading} className="bg-gradient-primary shadow-pop">عرض</Button></div>
+        </div>
+      </Card>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card className="bg-gradient-success p-5 border-0 shadow-pop"><div className="text-xs opacity-90">توصيلات</div><div className="text-3xl font-extrabold">{delivered}</div></Card>
+        <Card className="bg-gradient-warm p-5 border-0 shadow-pop"><div className="text-xs opacity-90">عمولتي ({commission}%)</div><div className="text-3xl font-extrabold">{earnings.toFixed(2)}</div></Card>
+        <Card className="bg-gradient-cool p-5 border-0 shadow-pop"><div className="text-xs opacity-90">إجمالي أتعاب التوصيل</div><div className="text-3xl font-extrabold">{fees.toFixed(2)}</div></Card>
+      </div>
+    </div>
+  );
+}
