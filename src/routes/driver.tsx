@@ -9,7 +9,9 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { LayoutDashboard, MapPin, Phone, Truck, Map as MapIcon, MessagesSquare, AlertTriangle, Store, CheckCircle2 } from "lucide-react";
+import { LayoutDashboard, MapPin, Phone, Truck, Map as MapIcon, MessagesSquare, AlertTriangle, Store, CheckCircle2, BarChart3 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
 import { ChatPanel } from "@/components/chat-panel";
@@ -31,7 +33,7 @@ interface Order {
   customer_address: string; items_total: number; delivery_price: number; total: number;
   status: string; created_at: string; accepted_at: string | null; notes: string | null; restaurant_id: string;
 }
-interface RestaurantInfo { id: string; name: string; address: string | null; phone: string | null }
+interface RestaurantInfo { id: string; name: string; address: string | null; phone: string | null; location_url: string | null }
 
 function DriverPage() {
   const { user, loading, roles } = useAuth();
@@ -92,7 +94,7 @@ function Body() {
     setOrders(data as Order[]);
     const restIds = Array.from(new Set(data.map((o) => o.restaurant_id))).filter(Boolean);
     if (restIds.length) {
-      const { data: rs } = await supabase.from("restaurants").select("id, name, address, phone").in("id", restIds);
+      const { data: rs } = await supabase.from("restaurants").select("id, name, address, phone, location_url").in("id", restIds);
       const map: Record<string, RestaurantInfo> = {};
       (rs ?? []).forEach((r) => { map[r.id as string] = r as RestaurantInfo; });
       setRestaurants(map);
@@ -102,10 +104,15 @@ function Body() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data: d } = await supabase.from("drivers").select("id, is_online, commission_rate").eq("user_id", user.id).maybeSingle();
+      const [{ data: d }, { data: s }] = await Promise.all([
+        supabase.from("drivers").select("id, is_online, commission_rate").eq("user_id", user.id).maybeSingle(),
+        supabase.from("app_settings").select("commission_rate").eq("id", 1).maybeSingle(),
+      ]);
       if (!d) return;
       setDriverId(d.id); setIsOnline(!!d.is_online);
-      setCommission(Number(d.commission_rate ?? 0));
+      const drvRate = Number(d.commission_rate ?? 0);
+      const appRate = Number(s?.commission_rate ?? 0);
+      setCommission(drvRate > 0 ? drvRate : appRate);
       await loadOrders(d.id, true);
     })();
   }, [user]);
@@ -175,6 +182,7 @@ function Body() {
   const navItems: NavItem[] = [
     { label: "اللوحة", icon: LayoutDashboard, onSelect: () => setTab("dashboard") },
     { label: "طلباتي", icon: Truck, onSelect: () => setTab("orders") },
+    { label: "التقارير", icon: BarChart3, onSelect: () => setTab("reports") },
     { label: "موقعي", icon: MapIcon, onSelect: () => setTab("map") },
     { label: "الشكاوى", icon: AlertTriangle, onSelect: () => setTab("complaints") },
     { label: "المحادثات", icon: MessagesSquare, onSelect: () => setTab("chat") },
@@ -196,7 +204,9 @@ function Body() {
     <div className="grid gap-4 md:grid-cols-2">
       {list.map((o) => {
         const r = restaurants[o.restaurant_id];
-        const restMaps = r?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.address)}` : null;
+        const restMaps = r?.location_url
+          ? r.location_url
+          : r?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.address)}` : null;
         const custMaps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customer_address)}`;
         const isPending = o.status === "pending";
         // 2 min from order creation (assignment proxy)
@@ -321,7 +331,7 @@ function Body() {
             </div>
           </div>
 
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+          <div className="grid gap-3 grid-cols-3">
             <button onClick={() => setTab("orders")} className="text-right bg-gradient-primary p-4 rounded-xl border-0 shadow-pop">
               <div className="text-[10px] uppercase opacity-90">نشطة</div>
               <div className="text-2xl font-extrabold">{totals.active}</div>
@@ -331,14 +341,19 @@ function Body() {
               <div className="text-2xl font-extrabold">{totals.delivered}</div>
             </Card>
             <Card className="bg-gradient-warm p-4 border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">عمولتي %</div>
-              <div className="text-2xl font-extrabold">{commission}%</div>
-            </Card>
-            <Card className="bg-gradient-warm p-4 border-0 shadow-pop">
               <div className="text-[10px] uppercase opacity-90">أرباحي</div>
               <div className="text-2xl font-extrabold">{totals.earnings.toFixed(2)}</div>
             </Card>
           </div>
+
+          <div>
+            <h2 className="mb-3 text-lg font-bold neon-text">الطلبات النشطة</h2>
+            {renderOrders(grouped.active)}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="reports" className="mt-0">
+          <DriverReports driverId={driverId} commission={commission} />
         </TabsContent>
 
         <TabsContent value="orders" className="mt-0 space-y-5">
@@ -379,5 +394,43 @@ function Body() {
         </TabsContent>
       </Tabs>
     </DashboardLayout>
+  );
+}
+
+function DriverReports({ driverId, commission }: { driverId: string; commission: number }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  const [from, setFrom] = useState(weekAgo);
+  const [to, setTo] = useState(today);
+  const [rows, setRows] = useState<Array<{ id: string; order_number: string; delivery_price: number; total: number | null; status: string; created_at: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const apply = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("orders").select("id, order_number, delivery_price, total, status, created_at")
+      .eq("driver_id", driverId).eq("status", "delivered")
+      .gte("created_at", from + "T00:00:00").lte("created_at", to + "T23:59:59")
+      .order("created_at", { ascending: false });
+    setRows(data ?? []);
+    setLoading(false);
+  };
+  const delivered = rows.length;
+  const fees = rows.reduce((s, r) => s + Number(r.delivery_price ?? 0), 0);
+  const earnings = fees * (commission / 100);
+  return (
+    <div className="space-y-4">
+      <Card className="p-5 shadow-soft">
+        <div className="mb-3 text-lg font-bold neon-text">تقريري</div>
+        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <div><Label className="text-xs">من تاريخ</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} dir="ltr" /></div>
+          <div><Label className="text-xs">إلى تاريخ</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} dir="ltr" /></div>
+          <div className="flex items-end"><Button onClick={apply} disabled={loading} className="bg-gradient-primary shadow-pop">عرض</Button></div>
+        </div>
+      </Card>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card className="bg-gradient-success p-5 border-0 shadow-pop"><div className="text-xs opacity-90">توصيلات</div><div className="text-3xl font-extrabold">{delivered}</div></Card>
+        <Card className="bg-gradient-warm p-5 border-0 shadow-pop"><div className="text-xs opacity-90">عمولتي ({commission}%)</div><div className="text-3xl font-extrabold">{earnings.toFixed(2)}</div></Card>
+        <Card className="bg-gradient-cool p-5 border-0 shadow-pop"><div className="text-xs opacity-90">إجمالي أتعاب التوصيل</div><div className="text-3xl font-extrabold">{fees.toFixed(2)}</div></Card>
+      </div>
+    </div>
   );
 }

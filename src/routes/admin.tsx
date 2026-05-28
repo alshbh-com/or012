@@ -33,7 +33,7 @@ export const Route = createFileRoute("/admin")({ component: AdminPage });
 /* navItems built inside AdminContent (state-driven) */
 
 interface City { id: string; name: string; delivery_price: number; is_active: boolean }
-interface Restaurant { id: string; name: string; phone: string | null; city_id: string | null; is_active: boolean; user_id: string; address: string | null }
+interface Restaurant { id: string; name: string; phone: string | null; city_id: string | null; is_active: boolean; user_id: string; address: string | null; location_url: string | null }
 interface Driver {
   id: string; phone: string | null; city_id: string | null; is_online: boolean; is_active: boolean; user_id: string;
   current_lat: number | null; current_lng: number | null; vehicle_type: string | null;
@@ -574,7 +574,7 @@ function RestaurantsTab() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <UserActions userId={r.user_id} entity={{ table: "restaurants", id: r.id, label: r.name }} cities={cities} role="restaurant" current={{ name: r.name, phone: r.phone ?? "", city_id: r.city_id, address: r.address }} onChange={load} />
+                  <UserActions userId={r.user_id} entity={{ table: "restaurants", id: r.id, label: r.name }} cities={cities} role="restaurant" current={{ name: r.name, phone: r.phone ?? "", city_id: r.city_id, address: r.address, location_url: r.location_url }} onChange={load} />
                 </TableCell>
               </TableRow>
             ))}
@@ -644,7 +644,7 @@ function DriversTab() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <UserActions userId={d.user_id} entity={{ table: "drivers", id: d.id, label: d.phone ?? d.id }} cities={cities} role="driver" current={{ name: "", phone: d.phone ?? "", city_id: d.city_id, address: null }} onChange={load} />
+                  <UserActions userId={d.user_id} entity={{ table: "drivers", id: d.id, label: d.phone ?? d.id }} cities={cities} role="driver" current={{ name: "", phone: d.phone ?? "", city_id: d.city_id, address: null, location_url: null }} onChange={load} />
                 </TableCell>
               </TableRow>
             ))}
@@ -661,7 +661,7 @@ function UserActions({ userId, entity, cities, role, current, onChange }: {
   entity: { table: "restaurants" | "drivers"; id: string; label: string };
   cities: City[];
   role: "restaurant" | "driver";
-  current: { name: string; phone: string; city_id: string | null; address: string | null };
+  current: { name: string; phone: string; city_id: string | null; address: string | null; location_url: string | null };
   onChange: () => void;
 }) {
   const [resetOpen, setResetOpen] = useState(false);
@@ -671,6 +671,7 @@ function UserActions({ userId, entity, cities, role, current, onChange }: {
   const [phone, setPhone] = useState(current.phone);
   const [cityId, setCityId] = useState(current.city_id ?? "");
   const [address, setAddress] = useState(current.address ?? "");
+  const [locationUrl, setLocationUrl] = useState(current.location_url ?? "");
 
   const resetPassword = async () => {
     const { data, error } = await invokeAdminFn("admin-manage-user", { action: "reset_password", user_id: userId, password: pwd });
@@ -680,7 +681,7 @@ function UserActions({ userId, entity, cities, role, current, onChange }: {
 
   const saveEdit = async () => {
     const updates: Record<string, unknown> = role === "restaurant"
-      ? { name, phone, city_id: cityId || null, address }
+      ? { name, phone, city_id: cityId || null, address, location_url: locationUrl || null }
       : { phone, city_id: cityId || null };
     const { error } = await (supabase.from(entity.table) as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } }).update(updates).eq("id", entity.id);
     if (error) return toast.error(error.message);
@@ -715,7 +716,10 @@ function UserActions({ userId, entity, cities, role, current, onChange }: {
               </Select>
             </div>
             {role === "restaurant" && (
-              <div className="space-y-1.5"><Label>العنوان</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} /></div>
+              <>
+                <div className="space-y-1.5"><Label>العنوان</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>رابط الموقع (Google Maps)</Label><Input value={locationUrl} onChange={(e) => setLocationUrl(e.target.value)} placeholder="https://maps.google.com/..." dir="ltr" /></div>
+              </>
             )}
           </div>
           <DialogFooter><Button onClick={saveEdit}>حفظ</Button></DialogFooter>
@@ -1258,14 +1262,19 @@ function CreateUserForm({ role, cities, onDone }: { role: "restaurant" | "driver
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [locationUrl, setLocationUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  void cities; // city is chosen per-order by the restaurant, not at user creation
+  void cities;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const { data, error } = await invokeAdminFn("admin-create-user", { phone, password, full_name: name, role, name, address: role === "restaurant" ? address : null });
+      const { data, error } = await invokeAdminFn("admin-create-user", {
+        phone, password, full_name: name, role, name,
+        address: role === "restaurant" ? address : null,
+        location_url: role === "restaurant" ? (locationUrl || null) : null,
+      });
       if (error) throw error;
       if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
       toast.success(role === "restaurant" ? "تم إنشاء المطعم" : "تم إنشاء المندوب");
@@ -1281,7 +1290,10 @@ function CreateUserForm({ role, cities, onDone }: { role: "restaurant" | "driver
       <div className="space-y-1.5"><Label>رقم الهاتف</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="07xxxxxxxx" dir="ltr" required /></div>
       <div className="space-y-1.5"><Label>كلمة المرور</Label><Input type="password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} required dir="ltr" /></div>
       {role === "restaurant" && (
-        <div className="space-y-1.5"><Label>عنوان / موقع المطعم</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="مثال: شارع المعز - وسط البلد" /></div>
+        <>
+          <div className="space-y-1.5"><Label>عنوان المطعم</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="مثال: شارع المعز - وسط البلد" /></div>
+          <div className="space-y-1.5"><Label>رابط الموقع (Google Maps)</Label><Input value={locationUrl} onChange={(e) => setLocationUrl(e.target.value)} placeholder="https://maps.google.com/..." dir="ltr" /></div>
+        </>
       )}
       <DialogFooter>
         <Button type="submit" disabled={loading}>{loading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إنشاء</Button>
