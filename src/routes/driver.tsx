@@ -331,7 +331,7 @@ function Body() {
             </div>
           </div>
 
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+          <div className="grid gap-3 grid-cols-3">
             <button onClick={() => setTab("orders")} className="text-right bg-gradient-primary p-4 rounded-xl border-0 shadow-pop">
               <div className="text-[10px] uppercase opacity-90">نشطة</div>
               <div className="text-2xl font-extrabold">{totals.active}</div>
@@ -341,14 +341,19 @@ function Body() {
               <div className="text-2xl font-extrabold">{totals.delivered}</div>
             </Card>
             <Card className="bg-gradient-warm p-4 border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">عمولتي %</div>
-              <div className="text-2xl font-extrabold">{commission}%</div>
-            </Card>
-            <Card className="bg-gradient-warm p-4 border-0 shadow-pop">
               <div className="text-[10px] uppercase opacity-90">أرباحي</div>
               <div className="text-2xl font-extrabold">{totals.earnings.toFixed(2)}</div>
             </Card>
           </div>
+
+          <div>
+            <h2 className="mb-3 text-lg font-bold neon-text">الطلبات النشطة</h2>
+            {renderOrders(grouped.active)}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="reports" className="mt-0">
+          <DriverReports driverId={driverId} commission={commission} />
         </TabsContent>
 
         <TabsContent value="orders" className="mt-0 space-y-5">
