@@ -156,7 +156,15 @@ function Body() {
             <Card className="bg-gradient-success p-4 border-0 shadow-pop text-white"><div className="text-[10px] uppercase opacity-90">تم التوصيل</div><div className="text-2xl font-extrabold">{totals.delivered}</div></Card>
             <Card className="bg-card p-4 shadow-soft"><div className="text-[10px] uppercase text-muted-foreground">إجمالي الطلبات</div><div className="text-2xl font-extrabold neon-text">{orders.length}</div></Card>
           </div>
+
+          <div>
+            <h2 className="mb-3 text-lg font-bold neon-text">الطلبات النشطة</h2>
+            <ActiveOrdersTable orders={orders.filter((o) => statusGroup(o.status) === "active")} driverInfo={driverInfo} />
+          </div>
         </TabsContent>
+
+        <TabsContent value="reports" className="mt-0">
+          <RestaurantReports restaurantId={restaurantId} />
 
         <TabsContent value="orders" className="mt-0 space-y-5">
           {/* Filters */}
