@@ -33,7 +33,7 @@ interface Order {
   customer_address: string; items_total: number; delivery_price: number; total: number;
   status: string; created_at: string; accepted_at: string | null; notes: string | null; restaurant_id: string;
 }
-interface RestaurantInfo { id: string; name: string; address: string | null; phone: string | null }
+interface RestaurantInfo { id: string; name: string; address: string | null; phone: string | null; location_url: string | null }
 
 function DriverPage() {
   const { user, loading, roles } = useAuth();
