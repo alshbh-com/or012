@@ -104,10 +104,15 @@ function Body() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data: d } = await supabase.from("drivers").select("id, is_online, commission_rate").eq("user_id", user.id).maybeSingle();
+      const [{ data: d }, { data: s }] = await Promise.all([
+        supabase.from("drivers").select("id, is_online, commission_rate").eq("user_id", user.id).maybeSingle(),
+        supabase.from("app_settings").select("commission_rate").eq("id", 1).maybeSingle(),
+      ]);
       if (!d) return;
       setDriverId(d.id); setIsOnline(!!d.is_online);
-      setCommission(Number(d.commission_rate ?? 0));
+      const drvRate = Number(d.commission_rate ?? 0);
+      const appRate = Number(s?.commission_rate ?? 0);
+      setCommission(drvRate > 0 ? drvRate : appRate);
       await loadOrders(d.id, true);
     })();
   }, [user]);
