@@ -402,7 +402,7 @@ function DriverReports({ driverId, commission }: { driverId: string; commission:
   const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
   const [from, setFrom] = useState(weekAgo);
   const [to, setTo] = useState(today);
-  const [rows, setRows] = useState<Array<{ id: string; order_number: string; delivery_price: number; total: number; status: string; created_at: string }>>([]);
+  const [rows, setRows] = useState<Array<{ id: string; order_number: string; delivery_price: number; total: number | null; status: string; created_at: string }>>([]);
   const [loading, setLoading] = useState(false);
   const apply = async () => {
     setLoading(true);
