@@ -574,7 +574,7 @@ function RestaurantsTab() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <UserActions userId={r.user_id} entity={{ table: "restaurants", id: r.id, label: r.name }} cities={cities} role="restaurant" current={{ name: r.name, phone: r.phone ?? "", city_id: r.city_id, address: r.address }} onChange={load} />
+                  <UserActions userId={r.user_id} entity={{ table: "restaurants", id: r.id, label: r.name }} cities={cities} role="restaurant" current={{ name: r.name, phone: r.phone ?? "", city_id: r.city_id, address: r.address, location_url: r.location_url }} onChange={load} />
                 </TableCell>
               </TableRow>
             ))}
