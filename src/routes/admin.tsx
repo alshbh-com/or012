@@ -681,7 +681,7 @@ function UserActions({ userId, entity, cities, role, current, onChange }: {
 
   const saveEdit = async () => {
     const updates: Record<string, unknown> = role === "restaurant"
-      ? { name, phone, city_id: cityId || null, address }
+      ? { name, phone, city_id: cityId || null, address, location_url: locationUrl || null }
       : { phone, city_id: cityId || null };
     const { error } = await (supabase.from(entity.table) as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } }).update(updates).eq("id", entity.id);
     if (error) return toast.error(error.message);
