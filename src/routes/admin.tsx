@@ -1262,14 +1262,19 @@ function CreateUserForm({ role, cities, onDone }: { role: "restaurant" | "driver
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [locationUrl, setLocationUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  void cities; // city is chosen per-order by the restaurant, not at user creation
+  void cities;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const { data, error } = await invokeAdminFn("admin-create-user", { phone, password, full_name: name, role, name, address: role === "restaurant" ? address : null });
+      const { data, error } = await invokeAdminFn("admin-create-user", {
+        phone, password, full_name: name, role, name,
+        address: role === "restaurant" ? address : null,
+        location_url: role === "restaurant" ? (locationUrl || null) : null,
+      });
       if (error) throw error;
       if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
       toast.success(role === "restaurant" ? "تم إنشاء المطعم" : "تم إنشاء المندوب");
@@ -1285,7 +1290,10 @@ function CreateUserForm({ role, cities, onDone }: { role: "restaurant" | "driver
       <div className="space-y-1.5"><Label>رقم الهاتف</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="07xxxxxxxx" dir="ltr" required /></div>
       <div className="space-y-1.5"><Label>كلمة المرور</Label><Input type="password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} required dir="ltr" /></div>
       {role === "restaurant" && (
-        <div className="space-y-1.5"><Label>عنوان / موقع المطعم</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="مثال: شارع المعز - وسط البلد" /></div>
+        <>
+          <div className="space-y-1.5"><Label>عنوان المطعم</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="مثال: شارع المعز - وسط البلد" /></div>
+          <div className="space-y-1.5"><Label>رابط الموقع (Google Maps)</Label><Input value={locationUrl} onChange={(e) => setLocationUrl(e.target.value)} placeholder="https://maps.google.com/..." dir="ltr" /></div>
+        </>
       )}
       <DialogFooter>
         <Button type="submit" disabled={loading}>{loading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إنشاء</Button>
