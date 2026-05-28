@@ -94,7 +94,7 @@ function Body() {
     setOrders(data as Order[]);
     const restIds = Array.from(new Set(data.map((o) => o.restaurant_id))).filter(Boolean);
     if (restIds.length) {
-      const { data: rs } = await supabase.from("restaurants").select("id, name, address, phone").in("id", restIds);
+      const { data: rs } = await supabase.from("restaurants").select("id, name, address, phone, location_url").in("id", restIds);
       const map: Record<string, RestaurantInfo> = {};
       (rs ?? []).forEach((r) => { map[r.id as string] = r as RestaurantInfo; });
       setRestaurants(map);
