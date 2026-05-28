@@ -444,3 +444,80 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
     </form>
   );
 }
+
+function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo: DriverInfoMap }) {
+  if (orders.length === 0) {
+    return <Card className="p-8 text-center text-sm text-muted-foreground shadow-soft">لا توجد طلبات نشطة الآن.</Card>;
+  }
+  return (
+    <Card className="p-5 overflow-x-auto shadow-soft">
+      <Table>
+        <TableHeader><TableRow>
+          <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>المندوب</TableHead>
+          <TableHead>التوصيل</TableHead><TableHead>الإجمالي</TableHead><TableHead>الحالة</TableHead>
+        </TableRow></TableHeader>
+        <TableBody>
+          {orders.map((o) => {
+            const info = o.driver_id ? driverInfo[o.driver_id] : null;
+            return (
+              <TableRow key={o.id}>
+                <TableCell><span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-gradient-primary px-2 text-xs font-bold text-primary-foreground">{o.daily_number ?? "—"}</span></TableCell>
+                <TableCell>
+                  <div className="font-medium">{o.customer_name}</div>
+                  <div className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</div>
+                </TableCell>
+                <TableCell>{info?.name ?? <span className="text-xs text-muted-foreground">— لم يُعيَّن</span>}</TableCell>
+                <TableCell className="text-accent">{Number(o.delivery_price).toFixed(2)}</TableCell>
+                <TableCell className="font-semibold">{Number(o.total).toFixed(2)}</TableCell>
+                <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </Card>
+  );
+}
+
+function RestaurantReports({ restaurantId }: { restaurantId: string }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  const [from, setFrom] = useState(weekAgo);
+  const [to, setTo] = useState(today);
+  const [rows, setRows] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(false);
+  const apply = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("orders").select("*")
+      .eq("restaurant_id", restaurantId)
+      .gte("created_at", from + "T00:00:00").lte("created_at", to + "T23:59:59")
+      .order("created_at", { ascending: false });
+    setRows((data ?? []) as Order[]);
+    setLoading(false);
+  };
+  const delivered = rows.filter((o) => o.status === "delivered");
+  const items = delivered.reduce((s, o) => s + Number(o.items_total ?? 0), 0);
+  const delivery = delivered.reduce((s, o) => s + Number(o.delivery_price ?? 0), 0);
+  const total = delivered.reduce((s, o) => s + Number(o.total ?? 0), 0);
+  return (
+    <div className="space-y-4">
+      <Card className="p-5 shadow-soft">
+        <div className="mb-3 text-lg font-bold neon-text">تقريري</div>
+        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <div><Label className="text-xs">من تاريخ</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} dir="ltr" /></div>
+          <div><Label className="text-xs">إلى تاريخ</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} dir="ltr" /></div>
+          <div className="flex items-end"><Button onClick={apply} disabled={loading} className="bg-gradient-primary shadow-pop">{loading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}عرض</Button></div>
+        </div>
+      </Card>
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Card className="bg-gradient-primary p-4 border-0 shadow-pop text-white"><div className="text-xs opacity-90">إجمالي الطلبات</div><div className="text-3xl font-extrabold">{rows.length}</div></Card>
+        <Card className="bg-gradient-success p-4 border-0 shadow-pop text-white"><div className="text-xs opacity-90">تم التوصيل</div><div className="text-3xl font-extrabold">{delivered.length}</div></Card>
+        <Card className="bg-gradient-warm p-4 border-0 shadow-pop text-white"><div className="text-xs opacity-90">قيمة المنتجات</div><div className="text-3xl font-extrabold">{items.toFixed(2)}</div></Card>
+        <Card className="bg-gradient-cool p-4 border-0 shadow-pop text-white"><div className="text-xs opacity-90">الإجمالي الكلي</div><div className="text-3xl font-extrabold">{total.toFixed(2)}</div></Card>
+      </div>
+      <Card className="p-5 shadow-soft">
+        <div className="mb-2 text-sm text-muted-foreground">أتعاب التوصيل في الفترة: <span className="font-bold text-accent">{delivery.toFixed(2)}</span></div>
+      </Card>
+    </div>
+  );
+}
