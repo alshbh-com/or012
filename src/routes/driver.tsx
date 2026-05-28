@@ -182,6 +182,7 @@ function Body() {
   const navItems: NavItem[] = [
     { label: "اللوحة", icon: LayoutDashboard, onSelect: () => setTab("dashboard") },
     { label: "طلباتي", icon: Truck, onSelect: () => setTab("orders") },
+    { label: "التقارير", icon: BarChart3, onSelect: () => setTab("reports") },
     { label: "موقعي", icon: MapIcon, onSelect: () => setTab("map") },
     { label: "الشكاوى", icon: AlertTriangle, onSelect: () => setTab("complaints") },
     { label: "المحادثات", icon: MessagesSquare, onSelect: () => setTab("chat") },
