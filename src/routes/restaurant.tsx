@@ -165,6 +165,8 @@ function Body() {
 
         <TabsContent value="reports" className="mt-0">
           <RestaurantReports restaurantId={restaurantId} />
+        </TabsContent>
+
 
         <TabsContent value="orders" className="mt-0 space-y-5">
           {/* Filters */}
