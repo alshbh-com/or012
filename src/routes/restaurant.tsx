@@ -120,6 +120,7 @@ function Body() {
   const navItems: NavItem[] = [
     { label: "اللوحة", icon: LayoutDashboard, onSelect: () => setActiveTab("dashboard") },
     { label: "الطلبات", icon: Package, onSelect: () => setActiveTab("orders") },
+    { label: "التقارير", icon: BarChart3, onSelect: () => setActiveTab("reports") },
     { label: "القائمة (المنتجات)", icon: UtensilsCrossed, onSelect: () => setActiveTab("products") },
   ];
 
