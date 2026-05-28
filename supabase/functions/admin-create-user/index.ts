@@ -13,6 +13,7 @@ interface Body {
   city_id?: string | null;
   name?: string;
   address?: string | null;
+  location_url?: string | null;
 }
 
 function phoneToEmail(p: string) {
