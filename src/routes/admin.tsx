@@ -661,7 +661,7 @@ function UserActions({ userId, entity, cities, role, current, onChange }: {
   entity: { table: "restaurants" | "drivers"; id: string; label: string };
   cities: City[];
   role: "restaurant" | "driver";
-  current: { name: string; phone: string; city_id: string | null; address: string | null };
+  current: { name: string; phone: string; city_id: string | null; address: string | null; location_url: string | null };
   onChange: () => void;
 }) {
   const [resetOpen, setResetOpen] = useState(false);
@@ -671,6 +671,7 @@ function UserActions({ userId, entity, cities, role, current, onChange }: {
   const [phone, setPhone] = useState(current.phone);
   const [cityId, setCityId] = useState(current.city_id ?? "");
   const [address, setAddress] = useState(current.address ?? "");
+  const [locationUrl, setLocationUrl] = useState(current.location_url ?? "");
 
   const resetPassword = async () => {
     const { data, error } = await invokeAdminFn("admin-manage-user", { action: "reset_password", user_id: userId, password: pwd });
