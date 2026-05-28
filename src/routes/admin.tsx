@@ -644,7 +644,7 @@ function DriversTab() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <UserActions userId={d.user_id} entity={{ table: "drivers", id: d.id, label: d.phone ?? d.id }} cities={cities} role="driver" current={{ name: "", phone: d.phone ?? "", city_id: d.city_id, address: null }} onChange={load} />
+                  <UserActions userId={d.user_id} entity={{ table: "drivers", id: d.id, label: d.phone ?? d.id }} cities={cities} role="driver" current={{ name: "", phone: d.phone ?? "", city_id: d.city_id, address: null, location_url: null }} onChange={load} />
                 </TableCell>
               </TableRow>
             ))}
