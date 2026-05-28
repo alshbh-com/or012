@@ -716,7 +716,10 @@ function UserActions({ userId, entity, cities, role, current, onChange }: {
               </Select>
             </div>
             {role === "restaurant" && (
-              <div className="space-y-1.5"><Label>العنوان</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} /></div>
+              <>
+                <div className="space-y-1.5"><Label>العنوان</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>رابط الموقع (Google Maps)</Label><Input value={locationUrl} onChange={(e) => setLocationUrl(e.target.value)} placeholder="https://maps.google.com/..." dir="ltr" /></div>
+              </>
             )}
           </div>
           <DialogFooter><Button onClick={saveEdit}>حفظ</Button></DialogFooter>
