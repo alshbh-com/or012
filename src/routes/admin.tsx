@@ -33,7 +33,7 @@ export const Route = createFileRoute("/admin")({ component: AdminPage });
 /* navItems built inside AdminContent (state-driven) */
 
 interface City { id: string; name: string; delivery_price: number; is_active: boolean }
-interface Restaurant { id: string; name: string; phone: string | null; city_id: string | null; is_active: boolean; user_id: string; address: string | null }
+interface Restaurant { id: string; name: string; phone: string | null; city_id: string | null; is_active: boolean; user_id: string; address: string | null; location_url: string | null }
 interface Driver {
   id: string; phone: string | null; city_id: string | null; is_online: boolean; is_active: boolean; user_id: string;
   current_lat: number | null; current_lng: number | null; vehicle_type: string | null;
