@@ -69,6 +69,7 @@ Deno.serve(async (req) => {
         phone: phoneDigits,
         city_id: body.city_id ?? null,
         address: body.address ?? null,
+        location_url: body.location_url ?? null,
       });
     } else if (body.role === "driver") {
       await admin.from("drivers").insert({
