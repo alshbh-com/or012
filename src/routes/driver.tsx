@@ -204,7 +204,9 @@ function Body() {
     <div className="grid gap-4 md:grid-cols-2">
       {list.map((o) => {
         const r = restaurants[o.restaurant_id];
-        const restMaps = r?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.address)}` : null;
+        const restMaps = r?.location_url
+          ? r.location_url
+          : r?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.address)}` : null;
         const custMaps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customer_address)}`;
         const isPending = o.status === "pending";
         // 2 min from order creation (assignment proxy)
