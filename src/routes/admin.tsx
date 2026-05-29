@@ -87,7 +87,7 @@ function AdminContent() {
   return (
     <DashboardLayout title="مسؤول" items={navItems}>
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsContent value="dashboard" className="mt-0"><DashboardHome onOpen={setTab} /></TabsContent>
+        <TabsContent value="dashboard" className="mt-0 space-y-5"><DashboardHome onOpen={setTab} /><ActiveOrdersPanel /></TabsContent>
         <TabsContent value="orders" className="mt-0"><OrdersTab /></TabsContent>
         <TabsContent value="unassigned" className="mt-0"><UnassignedTab /></TabsContent>
         <TabsContent value="drivers-status" className="mt-0"><DriversStatusTab /></TabsContent>
