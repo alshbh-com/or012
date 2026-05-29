@@ -87,7 +87,7 @@ function AdminContent() {
   return (
     <DashboardLayout title="مسؤول" items={navItems}>
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsContent value="dashboard" className="mt-0"><DashboardHome onOpen={setTab} /></TabsContent>
+        <TabsContent value="dashboard" className="mt-0 space-y-5"><DashboardHome onOpen={setTab} /><ActiveOrdersPanel /></TabsContent>
         <TabsContent value="orders" className="mt-0"><OrdersTab /></TabsContent>
         <TabsContent value="unassigned" className="mt-0"><UnassignedTab /></TabsContent>
         <TabsContent value="drivers-status" className="mt-0"><DriversStatusTab /></TabsContent>
@@ -145,6 +145,69 @@ function DashboardHome({ onOpen }: { onOpen: (t: string) => void }) {
       <Tile label="مندوبين متصلين" value={stats.driversOnline} onClick={() => onOpen("drivers-status")} gradient="bg-gradient-success" />
       <Tile label="المطاعم" value={stats.restaurants} onClick={() => onOpen("restaurants")} gradient="bg-gradient-primary" />
     </div>
+  );
+}
+
+function ActiveOrdersPanel() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [rests, setRests] = useState<Record<string, string>>({});
+  const load = async () => {
+    const { data } = await supabase.from("orders").select("*")
+      .in("status", ["pending","accepted","preparing","picked_up","on_the_way","on_hold"])
+      .order("created_at", { ascending: false });
+    const list = (data ?? []) as Order[];
+    setOrders(list);
+    const ids = Array.from(new Set(list.map((o) => o.restaurant_id)));
+    if (ids.length) {
+      const { data: rs } = await supabase.from("restaurants").select("id, name").in("id", ids);
+      const m: Record<string, string> = {};
+      (rs ?? []).forEach((r) => { m[r.id as string] = r.name as string; });
+      setRests(m);
+    }
+  };
+  useEffect(() => {
+    load();
+    const ch = supabase.channel("admin-active-orders")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, load).subscribe();
+    return () => { ch.unsubscribe(); };
+  }, []);
+  return (
+    <Card className="p-4 shadow-soft">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-lg font-bold neon-text">الطلبات النشطة</h2>
+        <Badge variant="outline">{orders.length}</Badge>
+      </div>
+      {orders.length === 0 ? (
+        <div className="py-6 text-center text-sm text-muted-foreground">لا توجد طلبات نشطة حالياً.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>#</TableHead>
+                <TableHead>العميل</TableHead>
+                <TableHead>المطعم</TableHead>
+                <TableHead>التوصيل</TableHead>
+                <TableHead>الإجمالي</TableHead>
+                <TableHead>الحالة</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {orders.map((o) => (
+                <TableRow key={o.id}>
+                  <TableCell className="font-bold">{o.daily_number ?? "—"}</TableCell>
+                  <TableCell>{o.customer_name}</TableCell>
+                  <TableCell>{rests[o.restaurant_id] ?? "—"}</TableCell>
+                  <TableCell>{Number(o.delivery_price).toFixed(2)}</TableCell>
+                  <TableCell className="font-bold">{Number(o.total).toFixed(2)}</TableCell>
+                  <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </Card>
   );
 }
 
