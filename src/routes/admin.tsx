@@ -70,8 +70,9 @@ function AdminContent() {
 
   const navItems: NavItem[] = [
     { label: "اللوحة", icon: LayoutDashboard, onSelect: () => setTab("dashboard") },
-    { label: "الطلبات", icon: Package, onSelect: () => setTab("orders") },
-    { label: "طلبات غير معينة", icon: AlertTriangle, onSelect: () => setTab("unassigned") },
+    { label: "الطلبات النشطة", icon: Package, onSelect: () => setTab("active") },
+    { label: "الطلبات القديمة", icon: Package, onSelect: () => setTab("old") },
+    { label: "بحث الطلبات", icon: Search, onSelect: () => setTab("orders") },
     { label: "حالة المندوبين", icon: Truck, onSelect: () => setTab("drivers-status") },
     { label: "الحسابات", icon: LayoutDashboard, onSelect: () => setTab("accounts") },
     { label: "التقارير", icon: LayoutDashboard, onSelect: () => setTab("reports") },
@@ -87,9 +88,13 @@ function AdminContent() {
   return (
     <DashboardLayout title="مسؤول" items={navItems}>
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsContent value="dashboard" className="mt-0 space-y-5"><DashboardHome onOpen={setTab} /><ActiveOrdersPanel /></TabsContent>
+        <TabsContent value="dashboard" className="mt-0 space-y-5">
+          <UnassignedTab />
+          <MapTab />
+        </TabsContent>
+        <TabsContent value="active" className="mt-0"><ActiveOrAssignedTab kind="active" /></TabsContent>
+        <TabsContent value="old" className="mt-0"><ActiveOrAssignedTab kind="old" /></TabsContent>
         <TabsContent value="orders" className="mt-0"><OrdersTab /></TabsContent>
-        <TabsContent value="unassigned" className="mt-0"><UnassignedTab /></TabsContent>
         <TabsContent value="drivers-status" className="mt-0"><DriversStatusTab /></TabsContent>
         <TabsContent value="accounts" className="mt-0"><AccountsTab /></TabsContent>
         <TabsContent value="reports" className="mt-0"><ReportsTab /></TabsContent>
@@ -102,6 +107,104 @@ function AdminContent() {
         <TabsContent value="settings" className="mt-0"><SettingsTab /></TabsContent>
       </Tabs>
     </DashboardLayout>
+  );
+}
+
+function AdminCountdown({ deadline, label }: { deadline: number; label: string }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const diff = Math.floor((deadline - now) / 1000);
+  const overdue = diff < 0;
+  const abs = Math.abs(diff);
+  const mm = String(Math.floor(abs / 60)).padStart(2, "0");
+  const ss = String(abs % 60).padStart(2, "0");
+  return (
+    <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold ${overdue ? "bg-destructive/15 text-destructive animate-pulse" : "bg-primary/15 text-primary"}`} dir="ltr">
+      {label}: {overdue ? "-" : ""}{mm}:{ss}
+    </span>
+  );
+}
+
+function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [rests, setRests] = useState<Record<string, string>>({});
+  const [drvNames, setDrvNames] = useState<Record<string, string>>({});
+  const load = async () => {
+    let q = supabase.from("orders").select("*").eq("is_closed", false).order("created_at", { ascending: false });
+    if (kind === "active") {
+      q = q.not("driver_id", "is", null).in("status", ["pending", "accepted", "preparing", "picked_up", "on_the_way", "on_hold"]);
+    } else {
+      q = q.in("status", ["delivered", "cancelled", "returned"]);
+    }
+    const { data } = await q;
+    const list = (data ?? []) as Order[];
+    setOrders(list);
+    const restIds = Array.from(new Set(list.map((o) => o.restaurant_id)));
+    const drvIds = Array.from(new Set(list.map((o) => o.driver_id).filter(Boolean) as string[]));
+    if (restIds.length) {
+      const { data: rs } = await supabase.from("restaurants").select("id, name").in("id", restIds);
+      const m: Record<string, string> = {};
+      (rs ?? []).forEach((r) => { m[r.id as string] = r.name as string; });
+      setRests(m);
+    }
+    if (drvIds.length) {
+      const { data: ds } = await supabase.from("drivers").select("id, user_id, phone").in("id", drvIds);
+      const uids = (ds ?? []).map((d) => d.user_id as string);
+      const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", uids);
+      const m: Record<string, string> = {};
+      (ds ?? []).forEach((d) => {
+        const p = profs?.find((pp) => pp.id === d.user_id);
+        m[d.id as string] = (p?.full_name as string) || (d.phone as string) || (d.id as string).slice(0, 6);
+      });
+      setDrvNames(m);
+    }
+  };
+  useEffect(() => {
+    load();
+    const ch = supabase.channel(`admin-${kind}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, load).subscribe();
+    return () => { ch.unsubscribe(); };
+  }, [kind]);
+  return (
+    <Card className="p-4 shadow-soft">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-lg font-bold neon-text">{kind === "active" ? "الطلبات النشطة" : "الطلبات القديمة"}</h2>
+        <Badge variant="outline">{orders.length}</Badge>
+      </div>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>المطعم</TableHead>
+            <TableHead>المندوب</TableHead><TableHead>التوصيل</TableHead><TableHead>الإجمالي</TableHead>
+            <TableHead>الحالة</TableHead>{kind === "active" && <TableHead>المؤقت</TableHead>}
+          </TableRow></TableHeader>
+          <TableBody>
+            {orders.map((o) => {
+              const acceptDeadline = o.assigned_at ? new Date(o.assigned_at).getTime() + 2 * 60 * 1000 : null;
+              const pickupDeadline = o.accepted_at ? new Date(o.accepted_at).getTime() + 15 * 60 * 1000 : null;
+              return (
+                <TableRow key={o.id}>
+                  <TableCell className="font-bold">{o.daily_number ?? "—"}</TableCell>
+                  <TableCell>{o.customer_name}</TableCell>
+                  <TableCell>{rests[o.restaurant_id] ?? "—"}</TableCell>
+                  <TableCell>{o.driver_id ? (drvNames[o.driver_id] ?? "—") : "—"}</TableCell>
+                  <TableCell>{Number(o.delivery_price).toFixed(2)}</TableCell>
+                  <TableCell className="font-bold">{Number(o.total).toFixed(2)}</TableCell>
+                  <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
+                  {kind === "active" && (
+                    <TableCell>
+                      {o.status === "pending" && acceptDeadline && <AdminCountdown deadline={acceptDeadline} label="قبول" />}
+                      {o.status === "accepted" && pickupDeadline && <AdminCountdown deadline={pickupDeadline} label="استلام" />}
+                    </TableCell>
+                  )}
+                </TableRow>
+              );
+            })}
+            {orders.length === 0 && <TableRow><TableCell colSpan={kind === "active" ? 8 : 7} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </div>
+    </Card>
   );
 }
 
