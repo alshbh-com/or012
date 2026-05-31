@@ -31,7 +31,7 @@ const NEXT_STATUS: Record<string, string[]> = {
 interface Order {
   id: string; order_number: string; daily_number: number | null; customer_name: string; customer_phone: string;
   customer_address: string; items_total: number; delivery_price: number; total: number;
-  status: string; created_at: string; accepted_at: string | null; notes: string | null; restaurant_id: string;
+  status: string; created_at: string; accepted_at: string | null; assigned_at: string | null; notes: string | null; restaurant_id: string;
 }
 interface RestaurantInfo { id: string; name: string; address: string | null; phone: string | null; location_url: string | null }
 
@@ -209,8 +209,9 @@ function Body() {
           : r?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.address)}` : null;
         const custMaps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customer_address)}`;
         const isPending = o.status === "pending";
-        // 2 min from order creation (assignment proxy)
-        const acceptDeadline = new Date(o.created_at).getTime() + 2 * 60 * 1000;
+        // 2 min from assignment to driver (assigned_at), fallback to created_at
+        const acceptStart = o.assigned_at ?? o.created_at;
+        const acceptDeadline = new Date(acceptStart).getTime() + 2 * 60 * 1000;
         // 15 min from accepted_at to pickup
         const pickupDeadline = o.accepted_at ? new Date(o.accepted_at).getTime() + 15 * 60 * 1000 : null;
         const next = NEXT_STATUS[o.status] ?? [];

@@ -301,7 +301,9 @@ export type Database = {
       orders: {
         Row: {
           accepted_at: string | null
+          assigned_at: string | null
           city_id: string | null
+          closed_at: string | null
           created_at: string
           customer_address: string
           customer_name: string
@@ -311,6 +313,7 @@ export type Database = {
           delivery_price: number
           driver_id: string | null
           id: string
+          is_closed: boolean
           items_total: number
           notes: string | null
           order_date: string
@@ -322,7 +325,9 @@ export type Database = {
         }
         Insert: {
           accepted_at?: string | null
+          assigned_at?: string | null
           city_id?: string | null
+          closed_at?: string | null
           created_at?: string
           customer_address: string
           customer_name: string
@@ -332,6 +337,7 @@ export type Database = {
           delivery_price?: number
           driver_id?: string | null
           id?: string
+          is_closed?: boolean
           items_total?: number
           notes?: string | null
           order_date?: string
@@ -343,7 +349,9 @@ export type Database = {
         }
         Update: {
           accepted_at?: string | null
+          assigned_at?: string | null
           city_id?: string | null
+          closed_at?: string | null
           created_at?: string
           customer_address?: string
           customer_name?: string
@@ -353,6 +361,7 @@ export type Database = {
           delivery_price?: number
           driver_id?: string | null
           id?: string
+          is_closed?: boolean
           items_total?: number
           notes?: string | null
           order_date?: string

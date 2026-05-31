@@ -42,7 +42,7 @@ interface Order {
   id: string; order_number: string; daily_number: number | null; customer_name: string; customer_phone: string;
   customer_address: string; items_total: number; delivery_price: number; total: number;
   status: string; restaurant_id: string; driver_id: string | null; city_id: string | null;
-  created_at: string;
+  created_at: string; assigned_at?: string | null; accepted_at?: string | null; is_closed?: boolean;
 }
 
 const STATUSES = ["pending","accepted","preparing","picked_up","on_the_way","on_hold","delivered","cancelled","returned"] as const;
@@ -70,8 +70,9 @@ function AdminContent() {
 
   const navItems: NavItem[] = [
     { label: "اللوحة", icon: LayoutDashboard, onSelect: () => setTab("dashboard") },
-    { label: "الطلبات", icon: Package, onSelect: () => setTab("orders") },
-    { label: "طلبات غير معينة", icon: AlertTriangle, onSelect: () => setTab("unassigned") },
+    { label: "الطلبات النشطة", icon: Package, onSelect: () => setTab("active") },
+    { label: "الطلبات القديمة", icon: Package, onSelect: () => setTab("old") },
+    { label: "بحث الطلبات", icon: Search, onSelect: () => setTab("orders") },
     { label: "حالة المندوبين", icon: Truck, onSelect: () => setTab("drivers-status") },
     { label: "الحسابات", icon: LayoutDashboard, onSelect: () => setTab("accounts") },
     { label: "التقارير", icon: LayoutDashboard, onSelect: () => setTab("reports") },
@@ -87,9 +88,13 @@ function AdminContent() {
   return (
     <DashboardLayout title="مسؤول" items={navItems}>
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsContent value="dashboard" className="mt-0 space-y-5"><DashboardHome onOpen={setTab} /><ActiveOrdersPanel /></TabsContent>
+        <TabsContent value="dashboard" className="mt-0 space-y-5">
+          <UnassignedTab />
+          <MapTab />
+        </TabsContent>
+        <TabsContent value="active" className="mt-0"><ActiveOrAssignedTab kind="active" /></TabsContent>
+        <TabsContent value="old" className="mt-0"><ActiveOrAssignedTab kind="old" /></TabsContent>
         <TabsContent value="orders" className="mt-0"><OrdersTab /></TabsContent>
-        <TabsContent value="unassigned" className="mt-0"><UnassignedTab /></TabsContent>
         <TabsContent value="drivers-status" className="mt-0"><DriversStatusTab /></TabsContent>
         <TabsContent value="accounts" className="mt-0"><AccountsTab /></TabsContent>
         <TabsContent value="reports" className="mt-0"><ReportsTab /></TabsContent>
@@ -105,111 +110,104 @@ function AdminContent() {
   );
 }
 
-function DashboardHome({ onOpen }: { onOpen: (t: string) => void }) {
-  const [stats, setStats] = useState({ active: 0, today: 0, driversOnline: 0, restaurants: 0, unassigned: 0 });
-  useEffect(() => {
-    const load = async () => {
-      const today = new Date(); today.setHours(0,0,0,0);
-      const [{ data: ords }, { data: drs }, { data: rs }] = await Promise.all([
-        supabase.from("orders").select("status, driver_id, created_at"),
-        supabase.from("drivers").select("is_online"),
-        supabase.from("restaurants").select("id"),
-      ]);
-      const orders = (ords ?? []) as { status: string; driver_id: string | null; created_at: string }[];
-      setStats({
-        active: orders.filter((o) => statusGroup(o.status) === "active").length,
-        today: orders.filter((o) => new Date(o.created_at) >= today).length,
-        unassigned: orders.filter((o) => !o.driver_id && statusGroup(o.status) === "active").length,
-        driversOnline: (drs ?? []).filter((d) => d.is_online).length,
-        restaurants: (rs ?? []).length,
-      });
-    };
-    load();
-    const ch = supabase.channel("admin-home")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "drivers" }, load)
-      .subscribe();
-    return () => { ch.unsubscribe(); };
-  }, []);
-  const Tile = ({ label, value, onClick, gradient }: { label: string; value: number | string; onClick: () => void; gradient: string }) => (
-    <button onClick={onClick} className={`text-right rounded-xl ${gradient} p-4 shadow-pop border-0 text-white transition hover:scale-[1.02] active:scale-95`}>
-      <div className="text-[10px] uppercase opacity-90">{label}</div>
-      <div className="text-2xl font-extrabold">{value}</div>
-    </button>
-  );
+function AdminCountdown({ deadline, label }: { deadline: number; label: string }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const diff = Math.floor((deadline - now) / 1000);
+  const overdue = diff < 0;
+  const abs = Math.abs(diff);
+  const mm = String(Math.floor(abs / 60)).padStart(2, "0");
+  const ss = String(abs % 60).padStart(2, "0");
   return (
-    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
-      <Tile label="الطلبات النشطة" value={stats.active} onClick={() => onOpen("orders")} gradient="bg-gradient-primary" />
-      <Tile label="طلبات اليوم" value={stats.today} onClick={() => onOpen("orders")} gradient="bg-gradient-cool" />
-      <Tile label="غير معينة" value={stats.unassigned} onClick={() => onOpen("unassigned")} gradient="bg-gradient-warm" />
-      <Tile label="مندوبين متصلين" value={stats.driversOnline} onClick={() => onOpen("drivers-status")} gradient="bg-gradient-success" />
-      <Tile label="المطاعم" value={stats.restaurants} onClick={() => onOpen("restaurants")} gradient="bg-gradient-primary" />
-    </div>
+    <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold ${overdue ? "bg-destructive/15 text-destructive animate-pulse" : "bg-primary/15 text-primary"}`} dir="ltr">
+      {label}: {overdue ? "-" : ""}{mm}:{ss}
+    </span>
   );
 }
 
-function ActiveOrdersPanel() {
+function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [rests, setRests] = useState<Record<string, string>>({});
+  const [drvNames, setDrvNames] = useState<Record<string, string>>({});
   const load = async () => {
-    const { data } = await supabase.from("orders").select("*")
-      .in("status", ["pending","accepted","preparing","picked_up","on_the_way","on_hold"])
-      .order("created_at", { ascending: false });
+    let q = supabase.from("orders").select("*").eq("is_closed", false).order("created_at", { ascending: false });
+    if (kind === "active") {
+      q = q.not("driver_id", "is", null).in("status", ["pending", "accepted", "preparing", "picked_up", "on_the_way", "on_hold"]);
+    } else {
+      q = q.in("status", ["delivered", "cancelled", "returned"]);
+    }
+    const { data } = await q;
     const list = (data ?? []) as Order[];
     setOrders(list);
-    const ids = Array.from(new Set(list.map((o) => o.restaurant_id)));
-    if (ids.length) {
-      const { data: rs } = await supabase.from("restaurants").select("id, name").in("id", ids);
+    const restIds = Array.from(new Set(list.map((o) => o.restaurant_id)));
+    const drvIds = Array.from(new Set(list.map((o) => o.driver_id).filter(Boolean) as string[]));
+    if (restIds.length) {
+      const { data: rs } = await supabase.from("restaurants").select("id, name").in("id", restIds);
       const m: Record<string, string> = {};
       (rs ?? []).forEach((r) => { m[r.id as string] = r.name as string; });
       setRests(m);
     }
+    if (drvIds.length) {
+      const { data: ds } = await supabase.from("drivers").select("id, user_id, phone").in("id", drvIds);
+      const uids = (ds ?? []).map((d) => d.user_id as string);
+      const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", uids);
+      const m: Record<string, string> = {};
+      (ds ?? []).forEach((d) => {
+        const p = profs?.find((pp) => pp.id === d.user_id);
+        m[d.id as string] = (p?.full_name as string) || (d.phone as string) || (d.id as string).slice(0, 6);
+      });
+      setDrvNames(m);
+    }
   };
   useEffect(() => {
     load();
-    const ch = supabase.channel("admin-active-orders")
+    const ch = supabase.channel(`admin-${kind}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, load).subscribe();
     return () => { ch.unsubscribe(); };
-  }, []);
+  }, [kind]);
   return (
     <Card className="p-4 shadow-soft">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-bold neon-text">الطلبات النشطة</h2>
+        <h2 className="text-lg font-bold neon-text">{kind === "active" ? "الطلبات النشطة" : "الطلبات القديمة"}</h2>
         <Badge variant="outline">{orders.length}</Badge>
       </div>
-      {orders.length === 0 ? (
-        <div className="py-6 text-center text-sm text-muted-foreground">لا توجد طلبات نشطة حالياً.</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>#</TableHead>
-                <TableHead>العميل</TableHead>
-                <TableHead>المطعم</TableHead>
-                <TableHead>التوصيل</TableHead>
-                <TableHead>الإجمالي</TableHead>
-                <TableHead>الحالة</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {orders.map((o) => (
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>المطعم</TableHead>
+            <TableHead>المندوب</TableHead><TableHead>التوصيل</TableHead><TableHead>الإجمالي</TableHead>
+            <TableHead>الحالة</TableHead>{kind === "active" && <TableHead>المؤقت</TableHead>}
+          </TableRow></TableHeader>
+          <TableBody>
+            {orders.map((o) => {
+              const acceptDeadline = o.assigned_at ? new Date(o.assigned_at).getTime() + 2 * 60 * 1000 : null;
+              const pickupDeadline = o.accepted_at ? new Date(o.accepted_at).getTime() + 15 * 60 * 1000 : null;
+              return (
                 <TableRow key={o.id}>
                   <TableCell className="font-bold">{o.daily_number ?? "—"}</TableCell>
                   <TableCell>{o.customer_name}</TableCell>
                   <TableCell>{rests[o.restaurant_id] ?? "—"}</TableCell>
+                  <TableCell>{o.driver_id ? (drvNames[o.driver_id] ?? "—") : "—"}</TableCell>
                   <TableCell>{Number(o.delivery_price).toFixed(2)}</TableCell>
                   <TableCell className="font-bold">{Number(o.total).toFixed(2)}</TableCell>
                   <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
+                  {kind === "active" && (
+                    <TableCell>
+                      {o.status === "pending" && acceptDeadline && <AdminCountdown deadline={acceptDeadline} label="قبول" />}
+                      {o.status === "accepted" && pickupDeadline && <AdminCountdown deadline={pickupDeadline} label="استلام" />}
+                    </TableCell>
+                  )}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+              );
+            })}
+            {orders.length === 0 && <TableRow><TableCell colSpan={kind === "active" ? 8 : 7} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </div>
     </Card>
   );
 }
+
 
 async function invokeAdminFn<T = unknown>(name: "admin-create-user" | "admin-manage-user", body: Record<string, unknown>) {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -296,9 +294,9 @@ function UnassignedTab() {
     return () => { ch.unsubscribe(); };
   }, []);
   const assign = async (orderId: string, driverId: string) => {
-    const { error } = await supabase.from("orders").update({ driver_id: driverId, status: "accepted" }).eq("id", orderId);
+    const { error } = await supabase.from("orders").update({ driver_id: driverId, assigned_at: new Date().toISOString(), status: "pending" } as never).eq("id", orderId);
     if (error) return toast.error(error.message);
-    toast.success("تم الإسناد"); load();
+    toast.success("تم الإسناد — في انتظار قبول المندوب"); load();
   };
   return (
     <Card className="p-5 shadow-soft">
@@ -862,9 +860,9 @@ function OrdersTab() {
   }, []);
 
   const assignDriver = async (orderId: string, driverId: string) => {
-    const { error } = await supabase.from("orders").update({ driver_id: driverId, status: "accepted" }).eq("id", orderId);
+    const { error } = await supabase.from("orders").update({ driver_id: driverId, assigned_at: new Date().toISOString(), status: "pending" } as never).eq("id", orderId);
     if (error) return toast.error(error.message);
-    toast.success("تم تعيين المندوب");
+    toast.success("تم التعيين — في انتظار قبول المندوب");
   };
 
   const updateStatus = async (orderId: string, status: string) => {
@@ -987,10 +985,14 @@ function ReportsTab() {
   const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
   const [from, setFrom] = useState(weekAgo);
   const [to, setTo] = useState(today);
+  const [restFilter, setRestFilter] = useState<string>("all");
+  const [drvFilter, setDrvFilter] = useState<string>("all");
+  const [includeClosed, setIncludeClosed] = useState(false);
   const [applied, setApplied] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [driverNames, setDriverNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
   const apply = async () => {
@@ -1005,51 +1007,108 @@ function ReportsTab() {
     ]);
     if (o.data) setOrders(o.data as Order[]);
     if (r.data) setRestaurants(r.data as Restaurant[]);
-    if (d.data) setDrivers(d.data as Driver[]);
+    if (d.data) {
+      const ds = d.data as Driver[];
+      setDrivers(ds);
+      const uids = ds.map((x) => x.user_id).filter(Boolean);
+      if (uids.length) {
+        const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", uids);
+        const m: Record<string, string> = {};
+        ds.forEach((x) => {
+          const p = profs?.find((pp) => pp.id === x.user_id);
+          m[x.id] = (p?.full_name as string) || x.phone || x.id.slice(0, 6);
+        });
+        setDriverNames(m);
+      }
+    }
     setApplied(true);
     setLoading(false);
   };
 
-  const delivered = orders.filter((o) => o.status === "delivered");
+  const filteredOrders = orders.filter((o) => {
+    if (!includeClosed && o.is_closed) return false;
+    if (restFilter !== "all" && o.restaurant_id !== restFilter) return false;
+    if (drvFilter !== "all" && o.driver_id !== drvFilter) return false;
+    return true;
+  });
+  const delivered = filteredOrders.filter((o) => o.status === "delivered");
   const totals = {
-    orders: orders.length,
+    orders: filteredOrders.length,
     delivered: delivered.length,
-    cancelled: orders.filter((o) => o.status === "cancelled").length,
+    cancelled: filteredOrders.filter((o) => o.status === "cancelled").length,
     revenue: delivered.reduce((s, o) => s + Number(o.total ?? 0), 0),
     items: delivered.reduce((s, o) => s + Number(o.items_total ?? 0), 0),
     delivery: delivered.reduce((s, o) => s + Number(o.delivery_price ?? 0), 0),
   };
 
+  const closeRestaurant = async (rid: string) => {
+    const ids = delivered.filter((o) => o.restaurant_id === rid && !o.is_closed).map((o) => o.id);
+    if (ids.length === 0) return toast.info("لا توجد طلبات للتقفيل");
+    const { error } = await supabase.from("orders").update({ is_closed: true, closed_at: new Date().toISOString() } as never).in("id", ids);
+    if (error) return toast.error(error.message);
+    toast.success(`تم تقفيل ${ids.length} طلب`); apply();
+  };
+  const closeDriver = async (did: string) => {
+    const ids = delivered.filter((o) => o.driver_id === did && !o.is_closed).map((o) => o.id);
+    if (ids.length === 0) return toast.info("لا توجد طلبات للتقفيل");
+    const { error } = await supabase.from("orders").update({ is_closed: true, closed_at: new Date().toISOString() } as never).in("id", ids);
+    if (error) return toast.error(error.message);
+    toast.success(`تم تقفيل ${ids.length} طلب`); apply();
+  };
+
   const restaurantStats = restaurants.map((r) => {
     const list = delivered.filter((o) => o.restaurant_id === r.id);
     return {
-      المطعم: r.name,
-      عدد_الطلبات: list.length,
-      إجمالي_المنتجات: list.reduce((s, o) => s + Number(o.items_total ?? 0), 0).toFixed(2),
-      إجمالي_التوصيل: list.reduce((s, o) => s + Number(o.delivery_price ?? 0), 0).toFixed(2),
-      للمطعم_بدون_توصيل: list.reduce((s, o) => s + Number(o.items_total ?? 0), 0).toFixed(2),
-      الإجمالي_الكلي: list.reduce((s, o) => s + Number(o.total ?? 0), 0).toFixed(2),
+      id: r.id, name: r.name,
+      count: list.length,
+      items: list.reduce((s, o) => s + Number(o.items_total ?? 0), 0).toFixed(2),
+      delivery: list.reduce((s, o) => s + Number(o.delivery_price ?? 0), 0).toFixed(2),
+      total: list.reduce((s, o) => s + Number(o.total ?? 0), 0).toFixed(2),
     };
-  }).filter((s) => s.عدد_الطلبات > 0);
+  }).filter((s) => s.count > 0);
 
   const driverStats = drivers.map((d) => {
     const list = delivered.filter((o) => o.driver_id === d.id);
     return {
-      المندوب: d.phone ?? d.id.slice(0, 8),
-      عدد_التوصيلات: list.length,
-      أتعاب_التوصيل: list.reduce((s, o) => s + Number(o.delivery_price ?? 0), 0).toFixed(2),
+      id: d.id,
+      name: driverNames[d.id] ?? (d.phone ?? d.id.slice(0, 8)),
+      count: list.length,
+      fees: list.reduce((s, o) => s + Number(o.delivery_price ?? 0), 0).toFixed(2),
     };
-  }).filter((s) => s.عدد_التوصيلات > 0);
+  }).filter((s) => s.count > 0);
 
   return (
     <div className="space-y-4">
       <Card className="p-5 shadow-soft">
         <div className="mb-3 text-lg font-bold text-gradient-primary">فلتر التقارير</div>
-        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <div><Label className="text-xs">من تاريخ</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} dir="ltr" /></div>
           <div><Label className="text-xs">إلى تاريخ</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} dir="ltr" /></div>
-          <div className="flex items-end"><Button onClick={apply} disabled={loading} className="bg-gradient-primary shadow-pop">{loading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}عرض التقرير</Button></div>
-          <div className="flex items-end"><Button variant="outline" onClick={() => { setFrom(weekAgo); setTo(today); }}>آخر 7 أيام</Button></div>
+          <div>
+            <Label className="text-xs">المطعم</Label>
+            <Select value={restFilter} onValueChange={setRestFilter}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل المطاعم</SelectItem>
+                {restaurants.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">المندوب</Label>
+            <Select value={drvFilter} onValueChange={setDrvFilter}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل المندوبين</SelectItem>
+                {drivers.map((d) => <SelectItem key={d.id} value={d.id}>{driverNames[d.id] ?? d.phone ?? d.id.slice(0, 8)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <Button onClick={apply} disabled={loading} className="bg-gradient-primary shadow-pop">{loading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}عرض التقرير</Button>
+          <Button variant="outline" onClick={() => { setFrom(weekAgo); setTo(today); }}>آخر 7 أيام</Button>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground"><Switch checked={includeClosed} onCheckedChange={setIncludeClosed} />إظهار المقفلة</label>
         </div>
       </Card>
 
@@ -1087,17 +1146,41 @@ function ReportsTab() {
                 <TableHeader><TableRow>
                   <TableHead>المطعم</TableHead><TableHead>الطلبات</TableHead>
                   <TableHead>قيمة المنتجات</TableHead><TableHead>التوصيل</TableHead>
-                  <TableHead>للمطعم (بدون توصيل)</TableHead><TableHead>الإجمالي</TableHead>
+                  <TableHead>الإجمالي</TableHead><TableHead>إجراء</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {restaurantStats.map((s) => (
-                    <TableRow key={s.المطعم}>
-                      <TableCell className="font-medium">{s.المطعم}</TableCell>
-                      <TableCell><Badge className="bg-gradient-primary">{s.عدد_الطلبات}</Badge></TableCell>
-                      <TableCell>{s.إجمالي_المنتجات}</TableCell>
-                      <TableCell>{s.إجمالي_التوصيل}</TableCell>
-                      <TableCell className="font-bold text-success">{s.للمطعم_بدون_توصيل}</TableCell>
-                      <TableCell className="font-semibold">{s.الإجمالي_الكلي}</TableCell>
+                    <TableRow key={s.id}>
+                      <TableCell className="font-medium">{s.name}</TableCell>
+                      <TableCell><Badge className="bg-gradient-primary">{s.count}</Badge></TableCell>
+                      <TableCell>{s.items}</TableCell>
+                      <TableCell>{s.delivery}</TableCell>
+                      <TableCell className="font-semibold">{s.total}</TableCell>
+                      <TableCell>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild><Button size="sm" variant="destructive">تقفيل + طباعة</Button></AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>تقفيل حساب {s.name}؟</AlertDialogTitle>
+                              <AlertDialogDescription>سيتم تصدير شيت CSV ثم إخفاء طلبات هذا المطعم من الحسابات والتقارير.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => {
+                                const list = delivered.filter((o) => o.restaurant_id === s.id).map((o) => ({
+                                  رقم: o.order_number, العميل: o.customer_name,
+                                  المنتجات: Number(o.items_total).toFixed(2),
+                                  التوصيل: Number(o.delivery_price).toFixed(2),
+                                  الإجمالي: Number(o.total).toFixed(2),
+                                  التاريخ: new Date(o.created_at).toLocaleString(),
+                                }));
+                                downloadCSV(`closing-${s.name}.csv`, list);
+                                closeRestaurant(s.id);
+                              }}>تأكيد التقفيل</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {restaurantStats.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">لا توجد بيانات</TableCell></TableRow>}
@@ -1115,16 +1198,40 @@ function ReportsTab() {
             </div>
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader><TableRow><TableHead>المندوب</TableHead><TableHead>عدد التوصيلات</TableHead><TableHead>أتعاب التوصيل</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>المندوب</TableHead><TableHead>عدد التوصيلات</TableHead><TableHead>أتعاب التوصيل</TableHead><TableHead>إجراء</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {driverStats.map((s) => (
-                    <TableRow key={s.المندوب}>
-                      <TableCell dir="ltr">{s.المندوب}</TableCell>
-                      <TableCell><Badge className="bg-gradient-cool">{s.عدد_التوصيلات}</Badge></TableCell>
-                      <TableCell className="font-semibold text-success">{s.أتعاب_التوصيل}</TableCell>
+                    <TableRow key={s.id}>
+                      <TableCell>{s.name}</TableCell>
+                      <TableCell><Badge className="bg-gradient-cool">{s.count}</Badge></TableCell>
+                      <TableCell className="font-semibold text-success">{s.fees}</TableCell>
+                      <TableCell>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild><Button size="sm" variant="destructive">تقفيل + طباعة</Button></AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>تقفيل حساب {s.name}؟</AlertDialogTitle>
+                              <AlertDialogDescription>سيتم تصدير شيت CSV ثم إخفاء طلبات هذا المندوب من الحسابات والتقارير.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => {
+                                const list = delivered.filter((o) => o.driver_id === s.id).map((o) => ({
+                                  رقم: o.order_number, العميل: o.customer_name,
+                                  التوصيل: Number(o.delivery_price).toFixed(2),
+                                  الإجمالي: Number(o.total).toFixed(2),
+                                  التاريخ: new Date(o.created_at).toLocaleString(),
+                                }));
+                                downloadCSV(`closing-driver-${s.name}.csv`, list);
+                                closeDriver(s.id);
+                              }}>تأكيد التقفيل</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </TableCell>
                     </TableRow>
                   ))}
-                  {driverStats.length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-sm text-muted-foreground">لا توجد بيانات</TableCell></TableRow>}
+                  {driverStats.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-sm text-muted-foreground">لا توجد بيانات</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
