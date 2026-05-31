@@ -42,7 +42,7 @@ interface Order {
   id: string; order_number: string; daily_number: number | null; customer_name: string; customer_phone: string;
   customer_address: string; items_total: number; delivery_price: number; total: number;
   status: string; restaurant_id: string; driver_id: string | null; city_id: string | null;
-  created_at: string;
+  created_at: string; assigned_at?: string | null; accepted_at?: string | null; is_closed?: boolean;
 }
 
 const STATUSES = ["pending","accepted","preparing","picked_up","on_the_way","on_hold","delivered","cancelled","returned"] as const;
