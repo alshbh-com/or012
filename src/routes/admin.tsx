@@ -965,9 +965,9 @@ function OrdersTab() {
   }, []);
 
   const assignDriver = async (orderId: string, driverId: string) => {
-    const { error } = await supabase.from("orders").update({ driver_id: driverId, status: "accepted" }).eq("id", orderId);
+    const { error } = await supabase.from("orders").update({ driver_id: driverId, assigned_at: new Date().toISOString(), status: "pending" } as never).eq("id", orderId);
     if (error) return toast.error(error.message);
-    toast.success("تم تعيين المندوب");
+    toast.success("تم التعيين — في انتظار قبول المندوب");
   };
 
   const updateStatus = async (orderId: string, status: string) => {
