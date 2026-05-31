@@ -399,9 +399,9 @@ function UnassignedTab() {
     return () => { ch.unsubscribe(); };
   }, []);
   const assign = async (orderId: string, driverId: string) => {
-    const { error } = await supabase.from("orders").update({ driver_id: driverId, status: "accepted" }).eq("id", orderId);
+    const { error } = await supabase.from("orders").update({ driver_id: driverId, assigned_at: new Date().toISOString(), status: "pending" } as never).eq("id", orderId);
     if (error) return toast.error(error.message);
-    toast.success("تم الإسناد"); load();
+    toast.success("تم الإسناد — في انتظار قبول المندوب"); load();
   };
   return (
     <Card className="p-5 shadow-soft">
