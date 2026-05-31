@@ -31,7 +31,7 @@ const NEXT_STATUS: Record<string, string[]> = {
 interface Order {
   id: string; order_number: string; daily_number: number | null; customer_name: string; customer_phone: string;
   customer_address: string; items_total: number; delivery_price: number; total: number;
-  status: string; created_at: string; accepted_at: string | null; notes: string | null; restaurant_id: string;
+  status: string; created_at: string; accepted_at: string | null; assigned_at: string | null; notes: string | null; restaurant_id: string;
 }
 interface RestaurantInfo { id: string; name: string; address: string | null; phone: string | null; location_url: string | null }
 
