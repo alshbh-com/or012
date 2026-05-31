@@ -209,8 +209,9 @@ function Body() {
           : r?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.address)}` : null;
         const custMaps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customer_address)}`;
         const isPending = o.status === "pending";
-        // 2 min from order creation (assignment proxy)
-        const acceptDeadline = new Date(o.created_at).getTime() + 2 * 60 * 1000;
+        // 2 min from assignment to driver (assigned_at), fallback to created_at
+        const acceptStart = o.assigned_at ?? o.created_at;
+        const acceptDeadline = new Date(acceptStart).getTime() + 2 * 60 * 1000;
         // 15 min from accepted_at to pickup
         const pickupDeadline = o.accepted_at ? new Date(o.accepted_at).getTime() + 15 * 60 * 1000 : null;
         const next = NEXT_STATUS[o.status] ?? [];
