@@ -986,14 +986,22 @@ function OrdersTab() {
                     </Select>
                   </TableCell>
                   <TableCell>
-                    <Select value={o.driver_id ?? ""} onValueChange={(v) => assignDriver(o.id, v)}>
-                      <SelectTrigger className="w-40 h-8"><SelectValue placeholder="تعيين…" /></SelectTrigger>
-                      <SelectContent>
-                        {drivers.filter((d) => d.is_active).map((d) =>
-                          <SelectItem key={d.id} value={d.id}>{driverNames[d.id] ?? d.phone ?? d.id.slice(0, 8)}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-1">
+                      <Select value={o.driver_id ?? ""} onValueChange={(v) => assignDriver(o.id, v)}>
+                        <SelectTrigger className="w-40 h-8"><SelectValue placeholder="تعيين…" /></SelectTrigger>
+                        <SelectContent>
+                          {drivers.filter((d) => d.is_active).map((d) =>
+                            <SelectItem key={d.id} value={d.id}>{driverNames[d.id] ?? d.phone ?? d.id.slice(0, 8)}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {o.driver_id && drivers.find((d) => d.id === o.driver_id)?.phone && (
+                        <a href={`tel:${drivers.find((d) => d.id === o.driver_id)?.phone}`} className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-success/15 text-success hover:bg-success/25" title="اتصال">
+                          <Phone className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
                   </TableCell>
+
                   <TableCell>
                     <Button variant="ghost" size="icon" onClick={() => setDetailsId(o.id)}><Eye className="h-4 w-4" /></Button>
                   </TableCell>
