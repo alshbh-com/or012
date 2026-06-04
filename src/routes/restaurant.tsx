@@ -360,14 +360,17 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!cityId) { toast.error("اختر المدينة"); return; }
     setLoading(true);
     const itemsLine = cart.length > 0 ? cart.map((i) => `${i.name} × ${i.qty}`).join("، ") : "";
     const combined = [itemsLine, driverNotes && `📝 للمندوب: ${driverNotes}`].filter(Boolean).join("\n");
+    const cityName = city?.name ?? "";
+    const finalAddress = `(${cityName})${address.trim() ? " " + address.trim() : ""}`;
     const { error } = await supabase.from("orders").insert({
       restaurant_id: restaurantId,
       customer_name: name,
       customer_phone: phone,
-      customer_address: address,
+      customer_address: finalAddress,
       city_id: cityId || null,
       items_total: itemsTotal,
       delivery_price: Number(deliveryPrice),
@@ -385,14 +388,16 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
         <div className="space-y-1.5"><Label>اسم العميل</Label><Input value={name} onChange={(e) => setName(e.target.value)} required /></div>
         <div className="space-y-1.5"><Label>رقم الهاتف</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} required dir="ltr" /></div>
       </div>
-      <div className="space-y-1.5"><Label>العنوان</Label><Textarea value={address} onChange={(e) => setAddress(e.target.value)} required /></div>
       <div className="space-y-1.5">
-        <Label>المدينة (يحدد سعر التوصيل تلقائياً)</Label>
+        <Label>المدينة <span className="text-destructive">*</span></Label>
         <Select value={cityId} onValueChange={setCityId}>
-          <SelectTrigger><SelectValue placeholder="اختر المدينة" /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder="اختر المدينة (إجباري)" /></SelectTrigger>
           <SelectContent>{cities.map((c) => <SelectItem key={c.id} value={c.id}>{c.name} — {Number(c.delivery_price).toFixed(2)}</SelectItem>)}</SelectContent>
         </Select>
+        <p className="text-[10px] text-muted-foreground">سيتم كتابة اسم المدينة بين قوسين قبل تفاصيل العنوان تلقائياً.</p>
       </div>
+      <div className="space-y-1.5"><Label>تفاصيل العنوان (اختياري)</Label><Textarea value={address} onChange={(e) => setAddress(e.target.value)} placeholder="مثال: شارع 9 - عمارة 12 - الدور الثالث" /></div>
+
 
       {products.length > 0 && (
         <div className="space-y-2">
