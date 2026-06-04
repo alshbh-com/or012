@@ -13,10 +13,43 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { LayoutDashboard, Plus, Truck, Loader2, UtensilsCrossed, Trash2, X, Package, BarChart3 } from "lucide-react";
+import { LayoutDashboard, Plus, Truck, Loader2, UtensilsCrossed, Trash2, X, Package, BarChart3, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
 import { useNotificationPermission, notify } from "@/lib/notifications";
+
+const CANCEL_WINDOW_MS = 5 * 60 * 1000;
+
+function CancelOrderButton({ orderId, createdAt, status, onDone }: { orderId: string; createdAt: string; status: string; onDone?: () => void }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const isFinal = ["delivered", "cancelled", "returned", "picked_up", "on_the_way"].includes(status);
+  if (isFinal) return null;
+  const deadline = new Date(createdAt).getTime() + CANCEL_WINDOW_MS;
+  const remainMs = deadline - now;
+  const expired = remainMs <= 0;
+  const mm = String(Math.floor(Math.max(0, remainMs) / 60000)).padStart(2, "0");
+  const ss = String(Math.floor((Math.max(0, remainMs) % 60000) / 1000)).padStart(2, "0");
+  const cancel = async () => {
+    if (expired) return;
+    if (!confirm("هل تريد إلغاء هذا الطلب؟")) return;
+    const { error } = await supabase.from("orders").update({ status: "cancelled" } as never).eq("id", orderId);
+    if (error) return toast.error(error.message);
+    toast.success("تم إلغاء الطلب");
+    onDone?.();
+  };
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <Button size="sm" variant="destructive" className="h-7 px-2 text-xs" disabled={expired} onClick={cancel}>
+        <XCircle className="ml-1 h-3.5 w-3.5" />إلغاء
+      </Button>
+      <span className={`text-[10px] font-bold ${expired ? "text-muted-foreground" : "text-destructive"}`} dir="ltr">
+        {expired ? "انتهى وقت الإلغاء" : `${mm}:${ss}`}
+      </span>
+    </div>
+  );
+}
+
 
 export const Route = createFileRoute("/restaurant")({
   component: RestaurantPage,
@@ -255,13 +288,17 @@ function OrdersByStatus({ orders, driverInfo }: { orders: Order[]; driverInfo: D
                 <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
                 {showPreparingBtn && (
                   <TableCell>
-                    {canConfirm ? (
-                      <Button size="sm" className="bg-gradient-primary shadow-pop h-8" onClick={() => confirmPreparing(o.id)}>
-                        تأكيد قيد التحضير
-                      </Button>
-                    ) : <span className="text-xs text-muted-foreground">—</span>}
+                    <div className="flex flex-col gap-1.5">
+                      {canConfirm ? (
+                        <Button size="sm" className="bg-gradient-primary shadow-pop h-8" onClick={() => confirmPreparing(o.id)}>
+                          تأكيد قيد التحضير
+                        </Button>
+                      ) : <span className="text-xs text-muted-foreground">—</span>}
+                      <CancelOrderButton orderId={o.id} createdAt={o.created_at} status={o.status} />
+                    </div>
                   </TableCell>
                 )}
+
               </TableRow>
             );
           })}
@@ -360,14 +397,17 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!cityId) { toast.error("اختر المدينة"); return; }
     setLoading(true);
     const itemsLine = cart.length > 0 ? cart.map((i) => `${i.name} × ${i.qty}`).join("، ") : "";
     const combined = [itemsLine, driverNotes && `📝 للمندوب: ${driverNotes}`].filter(Boolean).join("\n");
+    const cityName = city?.name ?? "";
+    const finalAddress = `(${cityName})${address.trim() ? " " + address.trim() : ""}`;
     const { error } = await supabase.from("orders").insert({
       restaurant_id: restaurantId,
       customer_name: name,
       customer_phone: phone,
-      customer_address: address,
+      customer_address: finalAddress,
       city_id: cityId || null,
       items_total: itemsTotal,
       delivery_price: Number(deliveryPrice),
@@ -385,14 +425,16 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
         <div className="space-y-1.5"><Label>اسم العميل</Label><Input value={name} onChange={(e) => setName(e.target.value)} required /></div>
         <div className="space-y-1.5"><Label>رقم الهاتف</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} required dir="ltr" /></div>
       </div>
-      <div className="space-y-1.5"><Label>العنوان</Label><Textarea value={address} onChange={(e) => setAddress(e.target.value)} required /></div>
       <div className="space-y-1.5">
-        <Label>المدينة (يحدد سعر التوصيل تلقائياً)</Label>
+        <Label>المدينة <span className="text-destructive">*</span></Label>
         <Select value={cityId} onValueChange={setCityId}>
-          <SelectTrigger><SelectValue placeholder="اختر المدينة" /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder="اختر المدينة (إجباري)" /></SelectTrigger>
           <SelectContent>{cities.map((c) => <SelectItem key={c.id} value={c.id}>{c.name} — {Number(c.delivery_price).toFixed(2)}</SelectItem>)}</SelectContent>
         </Select>
+        <p className="text-[10px] text-muted-foreground">سيتم كتابة اسم المدينة بين قوسين قبل تفاصيل العنوان تلقائياً.</p>
       </div>
+      <div className="space-y-1.5"><Label>تفاصيل العنوان (اختياري)</Label><Textarea value={address} onChange={(e) => setAddress(e.target.value)} placeholder="مثال: شارع 9 - عمارة 12 - الدور الثالث" /></div>
+
 
       {products.length > 0 && (
         <div className="space-y-2">
@@ -455,6 +497,7 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
         <TableHeader><TableRow>
           <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>المندوب</TableHead>
           <TableHead>التوصيل</TableHead><TableHead>الإجمالي</TableHead><TableHead>الحالة</TableHead>
+          <TableHead>إلغاء</TableHead>
         </TableRow></TableHeader>
         <TableBody>
           {orders.map((o) => {
@@ -466,10 +509,22 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
                   <div className="font-medium">{o.customer_name}</div>
                   <div className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</div>
                 </TableCell>
-                <TableCell>{info?.name ?? <span className="text-xs text-muted-foreground">— لم يُعيَّن</span>}</TableCell>
+                <TableCell>
+                  {info ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">{info.name}</span>
+                      {info.phone && (
+                        <Button asChild size="icon" variant="outline" className="h-7 w-7">
+                          <a href={`tel:${info.phone}`} title="اتصال"><Truck className="h-3.5 w-3.5" /></a>
+                        </Button>
+                      )}
+                    </div>
+                  ) : <span className="text-xs text-muted-foreground">— لم يُعيَّن</span>}
+                </TableCell>
                 <TableCell className="text-accent">{Number(o.delivery_price).toFixed(2)}</TableCell>
                 <TableCell className="font-semibold">{Number(o.total).toFixed(2)}</TableCell>
                 <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
+                <TableCell><CancelOrderButton orderId={o.id} createdAt={o.created_at} status={o.status} /></TableCell>
               </TableRow>
             );
           })}
@@ -478,6 +533,7 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
     </Card>
   );
 }
+
 
 function RestaurantReports({ restaurantId }: { restaurantId: string }) {
   const today = new Date().toISOString().slice(0, 10);

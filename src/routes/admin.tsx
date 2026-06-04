@@ -19,7 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import {
   LayoutDashboard, MapPin, Users, Package, Plus, Trash2, Truck, Loader2,
   Map as MapIcon, MessagesSquare, Eye, KeyRound, Search, Download, Settings as SettingsIcon,
-  AlertTriangle,
+  AlertTriangle, Phone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
@@ -128,7 +128,7 @@ function AdminCountdown({ deadline, label }: { deadline: number; label: string }
 function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [rests, setRests] = useState<Record<string, string>>({});
-  const [drvNames, setDrvNames] = useState<Record<string, string>>({});
+  const [drvInfo, setDrvInfo] = useState<Record<string, { name: string; phone: string | null }>>({});
   const load = async () => {
     let q = supabase.from("orders").select("*").eq("is_closed", false).order("created_at", { ascending: false });
     if (kind === "active") {
@@ -151,12 +151,15 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
       const { data: ds } = await supabase.from("drivers").select("id, user_id, phone").in("id", drvIds);
       const uids = (ds ?? []).map((d) => d.user_id as string);
       const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", uids);
-      const m: Record<string, string> = {};
+      const m: Record<string, { name: string; phone: string | null }> = {};
       (ds ?? []).forEach((d) => {
         const p = profs?.find((pp) => pp.id === d.user_id);
-        m[d.id as string] = (p?.full_name as string) || (d.phone as string) || (d.id as string).slice(0, 6);
+        m[d.id as string] = {
+          name: (p?.full_name as string) || (d.phone as string) || (d.id as string).slice(0, 6),
+          phone: (d.phone as string) ?? null,
+        };
       });
-      setDrvNames(m);
+      setDrvInfo(m);
     }
   };
   useEffect(() => {
@@ -182,12 +185,24 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
             {orders.map((o) => {
               const acceptDeadline = o.assigned_at ? new Date(o.assigned_at).getTime() + 2 * 60 * 1000 : null;
               const pickupDeadline = o.accepted_at ? new Date(o.accepted_at).getTime() + 15 * 60 * 1000 : null;
+              const info = o.driver_id ? drvInfo[o.driver_id] : null;
               return (
                 <TableRow key={o.id}>
                   <TableCell className="font-bold">{o.daily_number ?? "—"}</TableCell>
                   <TableCell>{o.customer_name}</TableCell>
                   <TableCell>{rests[o.restaurant_id] ?? "—"}</TableCell>
-                  <TableCell>{o.driver_id ? (drvNames[o.driver_id] ?? "—") : "—"}</TableCell>
+                  <TableCell>
+                    {info ? (
+                      <div className="flex items-center gap-1.5">
+                        <span>{info.name}</span>
+                        {info.phone && (
+                          <a href={`tel:${info.phone}`} className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-success/15 text-success hover:bg-success/25" title="اتصال">
+                            <Phone className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                      </div>
+                    ) : "—"}
+                  </TableCell>
                   <TableCell>{Number(o.delivery_price).toFixed(2)}</TableCell>
                   <TableCell className="font-bold">{Number(o.total).toFixed(2)}</TableCell>
                   <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
@@ -209,6 +224,7 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
 }
 
 
+
 async function invokeAdminFn<T = unknown>(name: "admin-create-user" | "admin-manage-user", body: Record<string, unknown>) {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || !sessionData.session?.access_token) {
@@ -227,26 +243,39 @@ function MapTab() {
   const [drivers, setDrivers] = useState<MapDriver[]>([]);
   useEffect(() => {
     const load = async () => {
-      const [{ data: ds }, { data: profs }, { data: ords }] = await Promise.all([
+      const [{ data: ds }, { data: profs }, { data: ords }, { data: rs }] = await Promise.all([
         supabase.from("drivers").select("id, user_id, phone, is_online, current_lat, current_lng"),
         supabase.from("profiles").select("id, full_name"),
-        supabase.from("orders").select("driver_id, status"),
+        supabase.from("orders").select("driver_id, status, customer_address, restaurant_id, created_at").order("created_at", { ascending: true }),
+        supabase.from("restaurants").select("id, name"),
       ]);
       if (!ds) return;
       const nameMap = new Map((profs ?? []).map((p) => [p.id as string, p.full_name as string]));
+      const restMap = new Map((rs ?? []).map((r) => [r.id as string, r.name as string]));
       const activeByDriver = new Map<string, number>();
+      const firstActiveByDriver = new Map<string, { restaurantName: string | null; customerAddress: string | null }>();
       (ords ?? []).forEach((o) => {
         if (o.driver_id && statusGroup(o.status as string) === "active") {
-          activeByDriver.set(o.driver_id as string, (activeByDriver.get(o.driver_id as string) ?? 0) + 1);
+          const did = o.driver_id as string;
+          activeByDriver.set(did, (activeByDriver.get(did) ?? 0) + 1);
+          if (!firstActiveByDriver.has(did)) {
+            firstActiveByDriver.set(did, {
+              restaurantName: restMap.get(o.restaurant_id as string) ?? null,
+              customerAddress: (o.customer_address as string) ?? null,
+            });
+          }
         }
       });
       setDrivers(
         ds.filter((d) => d.current_lat != null && d.current_lng != null).map((d) => {
           const cnt = activeByDriver.get(d.id as string) ?? 0;
+          const info = firstActiveByDriver.get(d.id as string);
           return {
             id: d.id as string, lat: Number(d.current_lat), lng: Number(d.current_lng),
             label: nameMap.get(d.user_id as string) || d.phone || (d.id as string).slice(0, 8),
             online: !!d.is_online, hasOrders: cnt > 0, activeCount: cnt,
+            restaurantName: info?.restaurantName ?? null,
+            customerAddress: info?.customerAddress ?? null,
           };
         }),
       );
@@ -272,6 +301,7 @@ function MapTab() {
     </Card>
   );
 }
+
 
 function UnassignedTab() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -956,14 +986,22 @@ function OrdersTab() {
                     </Select>
                   </TableCell>
                   <TableCell>
-                    <Select value={o.driver_id ?? ""} onValueChange={(v) => assignDriver(o.id, v)}>
-                      <SelectTrigger className="w-40 h-8"><SelectValue placeholder="تعيين…" /></SelectTrigger>
-                      <SelectContent>
-                        {drivers.filter((d) => d.is_active).map((d) =>
-                          <SelectItem key={d.id} value={d.id}>{driverNames[d.id] ?? d.phone ?? d.id.slice(0, 8)}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-1">
+                      <Select value={o.driver_id ?? ""} onValueChange={(v) => assignDriver(o.id, v)}>
+                        <SelectTrigger className="w-40 h-8"><SelectValue placeholder="تعيين…" /></SelectTrigger>
+                        <SelectContent>
+                          {drivers.filter((d) => d.is_active).map((d) =>
+                            <SelectItem key={d.id} value={d.id}>{driverNames[d.id] ?? d.phone ?? d.id.slice(0, 8)}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {o.driver_id && drivers.find((d) => d.id === o.driver_id)?.phone && (
+                        <a href={`tel:${drivers.find((d) => d.id === o.driver_id)?.phone}`} className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-success/15 text-success hover:bg-success/25" title="اتصال">
+                          <Phone className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
                   </TableCell>
+
                   <TableCell>
                     <Button variant="ghost" size="icon" onClick={() => setDetailsId(o.id)}><Eye className="h-4 w-4" /></Button>
                   </TableCell>

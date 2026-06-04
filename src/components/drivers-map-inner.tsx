@@ -63,12 +63,18 @@ export default function DriversMapInner({ drivers }: { drivers: MapDriver[] }) {
                 <div className={d.online ? "text-green-600 font-semibold" : "text-gray-500"}>
                   {d.online ? "🟢 متصل" : "⚪ غير متصل"}
                 </div>
-                <div className={d.hasOrders ? "text-pink-600 font-semibold" : "text-emerald-600"}>
-                  {d.hasOrders ? `📦 معه ${d.activeCount ?? 0} طلب` : "✅ فاضي"}
-                </div>
-                <div className="text-xs text-gray-500 mt-1" dir="ltr">{d.lat.toFixed(5)}, {d.lng.toFixed(5)}</div>
+                {d.hasOrders ? (
+                  <div className="mt-1 space-y-0.5">
+                    <div className="text-pink-600 font-semibold">📦 متصل ومعه طلب</div>
+                    {d.restaurantName && <div className="text-xs">المطعم: ({d.restaurantName})</div>}
+                    {d.customerAddress && <div className="text-xs">عنوان العميل: {d.customerAddress}</div>}
+                  </div>
+                ) : (
+                  <div className="text-emerald-600">✅ فاضي</div>
+                )}
               </div>
             </Popup>
+
           </Marker>
         ))}
       </MapContainer>

@@ -8,6 +8,8 @@ export interface MapDriver {
   online: boolean;
   hasOrders?: boolean;
   activeCount?: number;
+  restaurantName?: string | null;
+  customerAddress?: string | null;
 }
 
 const InnerMap = lazy(() => import("./drivers-map-inner"));
