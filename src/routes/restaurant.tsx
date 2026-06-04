@@ -493,6 +493,7 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
         <TableHeader><TableRow>
           <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>المندوب</TableHead>
           <TableHead>التوصيل</TableHead><TableHead>الإجمالي</TableHead><TableHead>الحالة</TableHead>
+          <TableHead>إلغاء</TableHead>
         </TableRow></TableHeader>
         <TableBody>
           {orders.map((o) => {
@@ -504,10 +505,22 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
                   <div className="font-medium">{o.customer_name}</div>
                   <div className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</div>
                 </TableCell>
-                <TableCell>{info?.name ?? <span className="text-xs text-muted-foreground">— لم يُعيَّن</span>}</TableCell>
+                <TableCell>
+                  {info ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">{info.name}</span>
+                      {info.phone && (
+                        <Button asChild size="icon" variant="outline" className="h-7 w-7">
+                          <a href={`tel:${info.phone}`} title="اتصال"><Truck className="h-3.5 w-3.5" /></a>
+                        </Button>
+                      )}
+                    </div>
+                  ) : <span className="text-xs text-muted-foreground">— لم يُعيَّن</span>}
+                </TableCell>
                 <TableCell className="text-accent">{Number(o.delivery_price).toFixed(2)}</TableCell>
                 <TableCell className="font-semibold">{Number(o.total).toFixed(2)}</TableCell>
                 <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
+                <TableCell><CancelOrderButton orderId={o.id} createdAt={o.created_at} status={o.status} /></TableCell>
               </TableRow>
             );
           })}
@@ -516,6 +529,7 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
     </Card>
   );
 }
+
 
 function RestaurantReports({ restaurantId }: { restaurantId: string }) {
   const today = new Date().toISOString().slice(0, 10);
