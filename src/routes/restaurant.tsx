@@ -18,6 +18,39 @@ import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 
+const CANCEL_WINDOW_MS = 5 * 60 * 1000;
+
+function CancelOrderButton({ orderId, createdAt, status, onDone }: { orderId: string; createdAt: string; status: string; onDone?: () => void }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const isFinal = ["delivered", "cancelled", "returned", "picked_up", "on_the_way"].includes(status);
+  if (isFinal) return null;
+  const deadline = new Date(createdAt).getTime() + CANCEL_WINDOW_MS;
+  const remainMs = deadline - now;
+  const expired = remainMs <= 0;
+  const mm = String(Math.floor(Math.max(0, remainMs) / 60000)).padStart(2, "0");
+  const ss = String(Math.floor((Math.max(0, remainMs) % 60000) / 1000)).padStart(2, "0");
+  const cancel = async () => {
+    if (expired) return;
+    if (!confirm("هل تريد إلغاء هذا الطلب؟")) return;
+    const { error } = await supabase.from("orders").update({ status: "cancelled" } as never).eq("id", orderId);
+    if (error) return toast.error(error.message);
+    toast.success("تم إلغاء الطلب");
+    onDone?.();
+  };
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <Button size="sm" variant="destructive" className="h-7 px-2 text-xs" disabled={expired} onClick={cancel}>
+        <XCircle className="ml-1 h-3.5 w-3.5" />إلغاء
+      </Button>
+      <span className={`text-[10px] font-bold ${expired ? "text-muted-foreground" : "text-destructive"}`} dir="ltr">
+        {expired ? "انتهى وقت الإلغاء" : `${mm}:${ss}`}
+      </span>
+    </div>
+  );
+}
+
+
 export const Route = createFileRoute("/restaurant")({
   component: RestaurantPage,
 });
