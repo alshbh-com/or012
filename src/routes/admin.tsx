@@ -128,7 +128,7 @@ function AdminCountdown({ deadline, label }: { deadline: number; label: string }
 function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [rests, setRests] = useState<Record<string, string>>({});
-  const [drvNames, setDrvNames] = useState<Record<string, string>>({});
+  const [drvInfo, setDrvInfo] = useState<Record<string, { name: string; phone: string | null }>>({});
   const load = async () => {
     let q = supabase.from("orders").select("*").eq("is_closed", false).order("created_at", { ascending: false });
     if (kind === "active") {
@@ -151,12 +151,15 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
       const { data: ds } = await supabase.from("drivers").select("id, user_id, phone").in("id", drvIds);
       const uids = (ds ?? []).map((d) => d.user_id as string);
       const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", uids);
-      const m: Record<string, string> = {};
+      const m: Record<string, { name: string; phone: string | null }> = {};
       (ds ?? []).forEach((d) => {
         const p = profs?.find((pp) => pp.id === d.user_id);
-        m[d.id as string] = (p?.full_name as string) || (d.phone as string) || (d.id as string).slice(0, 6);
+        m[d.id as string] = {
+          name: (p?.full_name as string) || (d.phone as string) || (d.id as string).slice(0, 6),
+          phone: (d.phone as string) ?? null,
+        };
       });
-      setDrvNames(m);
+      setDrvInfo(m);
     }
   };
   useEffect(() => {
@@ -182,12 +185,24 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
             {orders.map((o) => {
               const acceptDeadline = o.assigned_at ? new Date(o.assigned_at).getTime() + 2 * 60 * 1000 : null;
               const pickupDeadline = o.accepted_at ? new Date(o.accepted_at).getTime() + 15 * 60 * 1000 : null;
+              const info = o.driver_id ? drvInfo[o.driver_id] : null;
               return (
                 <TableRow key={o.id}>
                   <TableCell className="font-bold">{o.daily_number ?? "—"}</TableCell>
                   <TableCell>{o.customer_name}</TableCell>
                   <TableCell>{rests[o.restaurant_id] ?? "—"}</TableCell>
-                  <TableCell>{o.driver_id ? (drvNames[o.driver_id] ?? "—") : "—"}</TableCell>
+                  <TableCell>
+                    {info ? (
+                      <div className="flex items-center gap-1.5">
+                        <span>{info.name}</span>
+                        {info.phone && (
+                          <a href={`tel:${info.phone}`} className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-success/15 text-success hover:bg-success/25" title="اتصال">
+                            <Phone className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                      </div>
+                    ) : "—"}
+                  </TableCell>
                   <TableCell>{Number(o.delivery_price).toFixed(2)}</TableCell>
                   <TableCell className="font-bold">{Number(o.total).toFixed(2)}</TableCell>
                   <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
@@ -207,6 +222,7 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
     </Card>
   );
 }
+
 
 
 async function invokeAdminFn<T = unknown>(name: "admin-create-user" | "admin-manage-user", body: Record<string, unknown>) {
