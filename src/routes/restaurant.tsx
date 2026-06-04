@@ -288,13 +288,17 @@ function OrdersByStatus({ orders, driverInfo }: { orders: Order[]; driverInfo: D
                 <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
                 {showPreparingBtn && (
                   <TableCell>
-                    {canConfirm ? (
-                      <Button size="sm" className="bg-gradient-primary shadow-pop h-8" onClick={() => confirmPreparing(o.id)}>
-                        تأكيد قيد التحضير
-                      </Button>
-                    ) : <span className="text-xs text-muted-foreground">—</span>}
+                    <div className="flex flex-col gap-1.5">
+                      {canConfirm ? (
+                        <Button size="sm" className="bg-gradient-primary shadow-pop h-8" onClick={() => confirmPreparing(o.id)}>
+                          تأكيد قيد التحضير
+                        </Button>
+                      ) : <span className="text-xs text-muted-foreground">—</span>}
+                      <CancelOrderButton orderId={o.id} createdAt={o.created_at} status={o.status} />
+                    </div>
                   </TableCell>
                 )}
+
               </TableRow>
             );
           })}
