@@ -19,7 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import {
   LayoutDashboard, MapPin, Users, Package, Plus, Trash2, Truck, Loader2,
   Map as MapIcon, MessagesSquare, Eye, KeyRound, Search, Download, Settings as SettingsIcon,
-  AlertTriangle,
+  AlertTriangle, Phone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
