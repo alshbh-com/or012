@@ -88,7 +88,7 @@ function Body() {
   useNotificationPermission();
 
   const loadOrders = async (rid: string) => {
-    const { data } = await supabase.from("orders").select("*").eq("restaurant_id", rid).order("created_at", { ascending: false });
+    const { data } = await supabase.from("orders").select("*").eq("restaurant_id", rid).eq("closed_for_restaurant", false).order("created_at", { ascending: false });
     if (data) setOrders(data as Order[]);
   };
 
