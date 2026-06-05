@@ -217,7 +217,7 @@ function Body() {
         const next = NEXT_STATUS[o.status] ?? [];
 
         return (
-          <Card key={o.id} className="p-5 shadow-soft neon-border">
+          <Card key={o.id} className="p-3 shadow-soft neon-border text-sm">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-primary text-base font-extrabold text-primary-foreground shadow-pop">{o.daily_number ?? "—"}</span>
