@@ -64,10 +64,15 @@ export default function DriversMapInner({ drivers }: { drivers: MapDriver[] }) {
                   {d.online ? "🟢 متصل" : "⚪ غير متصل"}
                 </div>
                 {d.hasOrders ? (
-                  <div className="mt-1 space-y-0.5">
-                    <div className="text-pink-600 font-semibold">📦 متصل ومعه طلب</div>
-                    {d.restaurantName && <div className="text-xs">المطعم: ({d.restaurantName})</div>}
-                    {d.customerAddress && <div className="text-xs">عنوان العميل: {d.customerAddress}</div>}
+                  <div className="mt-1 space-y-1">
+                    <div className="text-pink-600 font-semibold">📦 معه {d.activeCount ?? 1} طلب</div>
+                    {(d.activeOrders && d.activeOrders.length > 0 ? d.activeOrders : [{ restaurantName: d.restaurantName ?? null, customerAddress: d.customerAddress ?? null }]).map((ord, i) => (
+                      <div key={i} className="rounded border border-gray-200 p-1.5 text-xs space-y-0.5">
+                        <div className="font-bold">طلب {i + 1}</div>
+                        {ord.restaurantName && <div>المطعم: ({ord.restaurantName})</div>}
+                        {ord.customerAddress && <div>عنوان العميل: {ord.customerAddress}</div>}
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="text-emerald-600">✅ فاضي</div>

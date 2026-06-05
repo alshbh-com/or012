@@ -127,3 +127,11 @@
 
 /* Leaflet */
 .leaflet-container { background: var(--muted); border-radius: var(--radius); }
+
+/* Clamp Leaflet z-indexes so they never overlap header/sheet */
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom { z-index: 1 !important; }
+.leaflet-popup-pane { z-index: 5 !important; }
+.leaflet-tooltip-pane { z-index: 4 !important; }
+.leaflet-control { z-index: 2 !important; }

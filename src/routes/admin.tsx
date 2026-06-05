@@ -22,13 +22,13 @@ import {
   AlertTriangle, Phone,
 } from "lucide-react";
 import { toast } from "sonner";
-import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
+import { STATUS_AR, statusGroup } from "@/lib/i18n";
 import { ChatPanel } from "@/components/chat-panel";
 import { ComplaintsList } from "@/components/complaints";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 import { downloadCSV } from "@/lib/export";
 
-export const Route = createFileRoute("/admin")({ component: AdminPage });
+export const Route = createFileRoute("/admin")({ component: AdminPage, ssr: false });
 
 /* navItems built inside AdminContent (state-driven) */
 
@@ -89,6 +89,7 @@ function AdminContent() {
     <DashboardLayout title="مسؤول" items={navItems}>
       <Tabs value={tab} onValueChange={setTab}>
         <TabsContent value="dashboard" className="mt-0 space-y-5">
+          <DashboardTiles onSelect={setTab} />
           <UnassignedTab />
           <MapTab />
         </TabsContent>
@@ -107,6 +108,44 @@ function AdminContent() {
         <TabsContent value="settings" className="mt-0"><SettingsTab /></TabsContent>
       </Tabs>
     </DashboardLayout>
+  );
+}
+
+function DashboardTiles({ onSelect }: { onSelect: (tab: string) => void }) {
+  const [today, setToday] = useState(0);
+  const [active, setActive] = useState(0);
+  const [online, setOnline] = useState(0);
+  const load = async () => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const [{ count: t }, { count: a }, { count: on }] = await Promise.all([
+      supabase.from("orders").select("*", { count: "exact", head: true }).gte("created_at", todayStr + "T00:00:00"),
+      supabase.from("orders").select("*", { count: "exact", head: true }).in("status", ["pending","accepted","preparing","picked_up","on_the_way","on_hold"]),
+      supabase.from("drivers").select("*", { count: "exact", head: true }).eq("is_online", true).eq("is_active", true),
+    ]);
+    setToday(t ?? 0); setActive(a ?? 0); setOnline(on ?? 0);
+  };
+  useEffect(() => {
+    load();
+    const ch = supabase.channel("admin-tiles")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "drivers" }, load).subscribe();
+    return () => { ch.unsubscribe(); };
+  }, []);
+  const tiles = [
+    { label: "طلبات اليوم", value: today, cls: "bg-gradient-primary", tab: "orders" },
+    { label: "طلبات نشطة", value: active, cls: "bg-gradient-cool", tab: "active" },
+    { label: "متابعة المندوبين", value: online, cls: "bg-gradient-success", tab: "drivers-status" },
+    { label: "بحث الطلبات", value: "🔍", cls: "bg-gradient-warm", tab: "orders" },
+  ];
+  return (
+    <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      {tiles.map((t) => (
+        <button key={t.label} onClick={() => onSelect(t.tab)} className={`${t.cls} p-4 rounded-xl border-0 shadow-pop text-right text-white`}>
+          <div className="text-[10px] uppercase opacity-90">{t.label}</div>
+          <div className="mt-1 text-2xl font-extrabold">{t.value}</div>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -130,7 +169,8 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
   const [rests, setRests] = useState<Record<string, string>>({});
   const [drvInfo, setDrvInfo] = useState<Record<string, { name: string; phone: string | null }>>({});
   const load = async () => {
-    let q = supabase.from("orders").select("*").eq("is_closed", false).order("created_at", { ascending: false });
+    // Admin sees the order while EITHER side is still open
+    let q = supabase.from("orders").select("*").or("closed_for_restaurant.eq.false,closed_for_driver.eq.false").order("created_at", { ascending: false });
     if (kind === "active") {
       q = q.not("driver_id", "is", null).in("status", ["pending", "accepted", "preparing", "picked_up", "on_the_way", "on_hold"]);
     } else {
@@ -168,6 +208,15 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, load).subscribe();
     return () => { ch.unsubscribe(); };
   }, [kind]);
+
+  const updateStatus = async (id: string, status: string) => {
+    const updates: Record<string, unknown> = { status };
+    if (status === "delivered") updates.delivered_at = new Date().toISOString();
+    const { error } = await (supabase.from("orders") as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } }).update(updates).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("تم التحديث");
+  };
+
   return (
     <Card className="p-4 shadow-soft">
       <div className="mb-3 flex items-center justify-between">
@@ -177,9 +226,16 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
       <div className="overflow-x-auto">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>المطعم</TableHead>
-            <TableHead>المندوب</TableHead><TableHead>التوصيل</TableHead><TableHead>الإجمالي</TableHead>
-            <TableHead>الحالة</TableHead>{kind === "active" && <TableHead>المؤقت</TableHead>}
+            <TableHead>#</TableHead>
+            <TableHead>المطعم</TableHead>
+            <TableHead>العنوان</TableHead>
+            <TableHead>العميل</TableHead>
+            <TableHead>المندوب</TableHead>
+            <TableHead>المنتجات</TableHead>
+            <TableHead>التوصيل</TableHead>
+            <TableHead>الإجمالي</TableHead>
+            <TableHead>الحالة</TableHead>
+            {kind === "active" && <TableHead>المؤقت</TableHead>}
           </TableRow></TableHeader>
           <TableBody>
             {orders.map((o) => {
@@ -189,8 +245,12 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
               return (
                 <TableRow key={o.id}>
                   <TableCell className="font-bold">{o.daily_number ?? "—"}</TableCell>
-                  <TableCell>{o.customer_name}</TableCell>
                   <TableCell>{rests[o.restaurant_id] ?? "—"}</TableCell>
+                  <TableCell className="max-w-[200px] text-xs whitespace-pre-wrap">{o.customer_address}</TableCell>
+                  <TableCell>
+                    <div className="font-medium">{o.customer_name}</div>
+                    <div className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</div>
+                  </TableCell>
                   <TableCell>
                     {info ? (
                       <div className="flex items-center gap-1.5">
@@ -203,9 +263,17 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
                       </div>
                     ) : "—"}
                   </TableCell>
+                  <TableCell>{Number(o.items_total ?? 0).toFixed(2)}</TableCell>
                   <TableCell>{Number(o.delivery_price).toFixed(2)}</TableCell>
                   <TableCell className="font-bold">{Number(o.total).toFixed(2)}</TableCell>
-                  <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
+                  <TableCell>
+                    <Select value={o.status} onValueChange={(v) => updateStatus(o.id, v)}>
+                      <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_AR[s]}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
                   {kind === "active" && (
                     <TableCell>
                       {o.status === "pending" && acceptDeadline && <AdminCountdown deadline={acceptDeadline} label="قبول" />}
@@ -215,7 +283,7 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
                 </TableRow>
               );
             })}
-            {orders.length === 0 && <TableRow><TableCell colSpan={kind === "active" ? 8 : 7} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
+            {orders.length === 0 && <TableRow><TableCell colSpan={kind === "active" ? 10 : 9} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
           </TableBody>
         </Table>
       </div>
@@ -253,29 +321,30 @@ function MapTab() {
       const nameMap = new Map((profs ?? []).map((p) => [p.id as string, p.full_name as string]));
       const restMap = new Map((rs ?? []).map((r) => [r.id as string, r.name as string]));
       const activeByDriver = new Map<string, number>();
-      const firstActiveByDriver = new Map<string, { restaurantName: string | null; customerAddress: string | null }>();
+      const ordersByDriver = new Map<string, Array<{ restaurantName: string | null; customerAddress: string | null }>>();
       (ords ?? []).forEach((o) => {
         if (o.driver_id && statusGroup(o.status as string) === "active") {
           const did = o.driver_id as string;
           activeByDriver.set(did, (activeByDriver.get(did) ?? 0) + 1);
-          if (!firstActiveByDriver.has(did)) {
-            firstActiveByDriver.set(did, {
-              restaurantName: restMap.get(o.restaurant_id as string) ?? null,
-              customerAddress: (o.customer_address as string) ?? null,
-            });
-          }
+          const arr = ordersByDriver.get(did) ?? [];
+          arr.push({
+            restaurantName: restMap.get(o.restaurant_id as string) ?? null,
+            customerAddress: (o.customer_address as string) ?? null,
+          });
+          ordersByDriver.set(did, arr);
         }
       });
       setDrivers(
         ds.filter((d) => d.current_lat != null && d.current_lng != null).map((d) => {
           const cnt = activeByDriver.get(d.id as string) ?? 0;
-          const info = firstActiveByDriver.get(d.id as string);
+          const list = ordersByDriver.get(d.id as string) ?? [];
           return {
             id: d.id as string, lat: Number(d.current_lat), lng: Number(d.current_lng),
             label: nameMap.get(d.user_id as string) || d.phone || (d.id as string).slice(0, 8),
             online: !!d.is_online, hasOrders: cnt > 0, activeCount: cnt,
-            restaurantName: info?.restaurantName ?? null,
-            customerAddress: info?.customerAddress ?? null,
+            restaurantName: list[0]?.restaurantName ?? null,
+            customerAddress: list[0]?.customerAddress ?? null,
+            activeOrders: list,
           };
         }),
       );
@@ -307,6 +376,7 @@ function UnassignedTab() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [driverNames, setDriverNames] = useState<Record<string, string>>({});
   const load = async () => {
     const [{ data: o }, { data: r }, { data: d }] = await Promise.all([
       supabase.from("orders").select("*").is("driver_id", null).in("status", ["pending", "accepted", "preparing"]).order("created_at", { ascending: false }),
@@ -315,7 +385,20 @@ function UnassignedTab() {
     ]);
     if (o) setOrders(o as Order[]);
     if (r) setRestaurants(r as Restaurant[]);
-    if (d) setDrivers(d as Driver[]);
+    if (d) {
+      const ds = d as Driver[];
+      setDrivers(ds);
+      const uids = ds.map((x) => x.user_id).filter(Boolean);
+      if (uids.length) {
+        const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", uids);
+        const m: Record<string, string> = {};
+        ds.forEach((x) => {
+          const p = profs?.find((pp) => pp.id === x.user_id);
+          m[x.id] = (p?.full_name as string) || x.phone || x.id.slice(0, 6);
+        });
+        setDriverNames(m);
+      }
+    }
   };
   useEffect(() => {
     load();
@@ -352,7 +435,7 @@ function UnassignedTab() {
                   <Select onValueChange={(v) => assign(o.id, v)}>
                     <SelectTrigger className="w-44 h-8"><SelectValue placeholder="اختر مندوب…" /></SelectTrigger>
                     <SelectContent>
-                      {drivers.map((d) => <SelectItem key={d.id} value={d.id}>{d.phone ?? d.id.slice(0, 8)}</SelectItem>)}
+                      {drivers.map((d) => <SelectItem key={d.id} value={d.id}>{driverNames[d.id] ?? d.phone ?? d.id.slice(0, 8)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </TableCell>
@@ -1064,7 +1147,8 @@ function ReportsTab() {
   };
 
   const filteredOrders = orders.filter((o) => {
-    if (!includeClosed && o.is_closed) return false;
+    const fullyClosed = (o as Order & { closed_for_restaurant?: boolean; closed_for_driver?: boolean }).closed_for_restaurant && (o as Order & { closed_for_driver?: boolean }).closed_for_driver;
+    if (!includeClosed && fullyClosed) return false;
     if (restFilter !== "all" && o.restaurant_id !== restFilter) return false;
     if (drvFilter !== "all" && o.driver_id !== drvFilter) return false;
     return true;
@@ -1080,18 +1164,18 @@ function ReportsTab() {
   };
 
   const closeRestaurant = async (rid: string) => {
-    const ids = delivered.filter((o) => o.restaurant_id === rid && !o.is_closed).map((o) => o.id);
-    if (ids.length === 0) return toast.info("لا توجد طلبات للتقفيل");
-    const { error } = await supabase.from("orders").update({ is_closed: true, closed_at: new Date().toISOString() } as never).in("id", ids);
+    const ids = delivered.filter((o) => o.restaurant_id === rid && !(o as Order & { closed_for_restaurant?: boolean }).closed_for_restaurant).map((o) => o.id);
+    if (ids.length === 0) return toast.info("لا توجد طلبات للتقفيل مع هذا المطعم");
+    const { error } = await supabase.from("orders").update({ closed_for_restaurant: true, closed_for_restaurant_at: new Date().toISOString() } as never).in("id", ids);
     if (error) return toast.error(error.message);
-    toast.success(`تم تقفيل ${ids.length} طلب`); apply();
+    toast.success(`تم تقفيل ${ids.length} طلب مع المطعم`); apply();
   };
   const closeDriver = async (did: string) => {
-    const ids = delivered.filter((o) => o.driver_id === did && !o.is_closed).map((o) => o.id);
-    if (ids.length === 0) return toast.info("لا توجد طلبات للتقفيل");
-    const { error } = await supabase.from("orders").update({ is_closed: true, closed_at: new Date().toISOString() } as never).in("id", ids);
+    const ids = delivered.filter((o) => o.driver_id === did && !(o as Order & { closed_for_driver?: boolean }).closed_for_driver).map((o) => o.id);
+    if (ids.length === 0) return toast.info("لا توجد طلبات للتقفيل مع هذا المندوب");
+    const { error } = await supabase.from("orders").update({ closed_for_driver: true, closed_for_driver_at: new Date().toISOString() } as never).in("id", ids);
     if (error) return toast.error(error.message);
-    toast.success(`تم تقفيل ${ids.length} طلب`); apply();
+    toast.success(`تم تقفيل ${ids.length} طلب مع المندوب`); apply();
   };
 
   const restaurantStats = restaurants.map((r) => {

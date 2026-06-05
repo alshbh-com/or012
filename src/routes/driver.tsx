@@ -19,7 +19,7 @@ import { ComplaintsList } from "@/components/complaints";
 import { DriversMap, type MapDriver } from "@/components/drivers-map";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 
-export const Route = createFileRoute("/driver")({ component: DriverPage });
+export const Route = createFileRoute("/driver")({ component: DriverPage, ssr: false });
 
 const NEXT_STATUS: Record<string, string[]> = {
   accepted: ["picked_up"],
@@ -80,7 +80,7 @@ function Body() {
   useNotificationPermission();
 
   const loadOrders = async (did: string, isInitial = false) => {
-    const { data } = await supabase.from("orders").select("*").eq("driver_id", did).order("created_at", { ascending: false });
+    const { data } = await supabase.from("orders").select("*").eq("driver_id", did).eq("closed_for_driver", false).order("created_at", { ascending: false });
     if (!data) return;
     if (!isInitial) {
       data.forEach((o) => {
@@ -217,7 +217,7 @@ function Body() {
         const next = NEXT_STATUS[o.status] ?? [];
 
         return (
-          <Card key={o.id} className="p-5 shadow-soft neon-border">
+          <Card key={o.id} className="p-3 shadow-soft neon-border text-sm">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-primary text-base font-extrabold text-primary-foreground shadow-pop">{o.daily_number ?? "—"}</span>
@@ -348,7 +348,10 @@ function Body() {
           </div>
 
           <div>
-            <h2 className="mb-3 text-lg font-bold neon-text">الطلبات النشطة</h2>
+            <h2 className="mb-3 text-lg font-bold neon-text flex items-center gap-2">
+              الطلبات النشطة
+              <Badge className="bg-gradient-primary">{totals.active}</Badge>
+            </h2>
             {renderOrders(grouped.active)}
           </div>
         </TabsContent>

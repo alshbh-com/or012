@@ -13,12 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { LayoutDashboard, Plus, Truck, Loader2, UtensilsCrossed, Trash2, X, Package, BarChart3, XCircle } from "lucide-react";
+import { LayoutDashboard, Plus, Truck, Loader2, UtensilsCrossed, Trash2, X, Package, BarChart3, XCircle, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 
-const CANCEL_WINDOW_MS = 5 * 60 * 1000;
+const CANCEL_WINDOW_MS = 3 * 60 * 1000;
 
 function CancelOrderButton({ orderId, createdAt, status, onDone }: { orderId: string; createdAt: string; status: string; onDone?: () => void }) {
   const [now, setNow] = useState(Date.now());
@@ -53,6 +53,7 @@ function CancelOrderButton({ orderId, createdAt, status, onDone }: { orderId: st
 
 export const Route = createFileRoute("/restaurant")({
   component: RestaurantPage,
+  ssr: false,
 });
 
 interface City { id: string; name: string; delivery_price: number }
@@ -61,6 +62,7 @@ interface Order {
   id: string; order_number: string; daily_number: number | null; customer_name: string; customer_phone: string;
   customer_address: string; items_total: number; delivery_price: number; total: number;
   status: string; driver_id: string | null; created_at: string; notes: string | null; city_id: string | null;
+  restaurant_id?: string; closed_for_restaurant?: boolean;
 }
 
 function RestaurantPage() {
@@ -87,7 +89,7 @@ function Body() {
   useNotificationPermission();
 
   const loadOrders = async (rid: string) => {
-    const { data } = await supabase.from("orders").select("*").eq("restaurant_id", rid).order("created_at", { ascending: false });
+    const { data } = await supabase.from("orders").select("*").eq("restaurant_id", rid).eq("closed_for_restaurant", false).order("created_at", { ascending: false });
     if (data) setOrders(data as Order[]);
   };
 
@@ -514,8 +516,8 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm">{info.name}</span>
                       {info.phone && (
-                        <Button asChild size="icon" variant="outline" className="h-7 w-7">
-                          <a href={`tel:${info.phone}`} title="اتصال"><Truck className="h-3.5 w-3.5" /></a>
+                        <Button asChild size="icon" variant="outline" className="h-7 w-7 bg-success/15 text-success border-success/40 hover:bg-success/25">
+                          <a href={`tel:${info.phone}`} title="اتصال"><Phone className="h-3.5 w-3.5" /></a>
                         </Button>
                       )}
                     </div>
