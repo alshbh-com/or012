@@ -28,7 +28,7 @@ import { ComplaintsList } from "@/components/complaints";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 import { downloadCSV } from "@/lib/export";
 
-export const Route = createFileRoute("/admin")({ component: AdminPage });
+export const Route = createFileRoute("/admin")({ component: AdminPage, ssr: false });
 
 /* navItems built inside AdminContent (state-driven) */
 
