@@ -80,7 +80,7 @@ function Body() {
   useNotificationPermission();
 
   const loadOrders = async (did: string, isInitial = false) => {
-    const { data } = await supabase.from("orders").select("*").eq("driver_id", did).order("created_at", { ascending: false });
+    const { data } = await supabase.from("orders").select("*").eq("driver_id", did).eq("closed_for_driver", false).order("created_at", { ascending: false });
     if (!data) return;
     if (!isInitial) {
       data.forEach((o) => {
