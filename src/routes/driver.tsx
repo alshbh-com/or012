@@ -348,7 +348,10 @@ function Body() {
           </div>
 
           <div>
-            <h2 className="mb-3 text-lg font-bold neon-text">الطلبات النشطة</h2>
+            <h2 className="mb-3 text-lg font-bold neon-text flex items-center gap-2">
+              الطلبات النشطة
+              <Badge className="bg-gradient-primary">{totals.active}</Badge>
+            </h2>
             {renderOrders(grouped.active)}
           </div>
         </TabsContent>
