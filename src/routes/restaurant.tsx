@@ -515,8 +515,8 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm">{info.name}</span>
                       {info.phone && (
-                        <Button asChild size="icon" variant="outline" className="h-7 w-7">
-                          <a href={`tel:${info.phone}`} title="اتصال"><Truck className="h-3.5 w-3.5" /></a>
+                        <Button asChild size="icon" variant="outline" className="h-7 w-7 bg-success/15 text-success border-success/40 hover:bg-success/25">
+                          <a href={`tel:${info.phone}`} title="اتصال"><Phone className="h-3.5 w-3.5" /></a>
                         </Button>
                       )}
                     </div>
