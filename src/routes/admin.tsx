@@ -1132,7 +1132,8 @@ function ReportsTab() {
   };
 
   const filteredOrders = orders.filter((o) => {
-    if (!includeClosed && o.is_closed) return false;
+    const fullyClosed = (o as Order & { closed_for_restaurant?: boolean; closed_for_driver?: boolean }).closed_for_restaurant && (o as Order & { closed_for_driver?: boolean }).closed_for_driver;
+    if (!includeClosed && fullyClosed) return false;
     if (restFilter !== "all" && o.restaurant_id !== restFilter) return false;
     if (drvFilter !== "all" && o.driver_id !== drvFilter) return false;
     return true;
@@ -1148,18 +1149,18 @@ function ReportsTab() {
   };
 
   const closeRestaurant = async (rid: string) => {
-    const ids = delivered.filter((o) => o.restaurant_id === rid && !o.is_closed).map((o) => o.id);
-    if (ids.length === 0) return toast.info("لا توجد طلبات للتقفيل");
-    const { error } = await supabase.from("orders").update({ is_closed: true, closed_at: new Date().toISOString() } as never).in("id", ids);
+    const ids = delivered.filter((o) => o.restaurant_id === rid && !(o as Order & { closed_for_restaurant?: boolean }).closed_for_restaurant).map((o) => o.id);
+    if (ids.length === 0) return toast.info("لا توجد طلبات للتقفيل مع هذا المطعم");
+    const { error } = await supabase.from("orders").update({ closed_for_restaurant: true, closed_for_restaurant_at: new Date().toISOString() } as never).in("id", ids);
     if (error) return toast.error(error.message);
-    toast.success(`تم تقفيل ${ids.length} طلب`); apply();
+    toast.success(`تم تقفيل ${ids.length} طلب مع المطعم`); apply();
   };
   const closeDriver = async (did: string) => {
-    const ids = delivered.filter((o) => o.driver_id === did && !o.is_closed).map((o) => o.id);
-    if (ids.length === 0) return toast.info("لا توجد طلبات للتقفيل");
-    const { error } = await supabase.from("orders").update({ is_closed: true, closed_at: new Date().toISOString() } as never).in("id", ids);
+    const ids = delivered.filter((o) => o.driver_id === did && !(o as Order & { closed_for_driver?: boolean }).closed_for_driver).map((o) => o.id);
+    if (ids.length === 0) return toast.info("لا توجد طلبات للتقفيل مع هذا المندوب");
+    const { error } = await supabase.from("orders").update({ closed_for_driver: true, closed_for_driver_at: new Date().toISOString() } as never).in("id", ids);
     if (error) return toast.error(error.message);
-    toast.success(`تم تقفيل ${ids.length} طلب`); apply();
+    toast.success(`تم تقفيل ${ids.length} طلب مع المندوب`); apply();
   };
 
   const restaurantStats = restaurants.map((r) => {
