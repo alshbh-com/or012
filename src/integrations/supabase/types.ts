@@ -304,6 +304,10 @@ export type Database = {
           assigned_at: string | null
           city_id: string | null
           closed_at: string | null
+          closed_for_driver: boolean
+          closed_for_driver_at: string | null
+          closed_for_restaurant: boolean
+          closed_for_restaurant_at: string | null
           created_at: string
           customer_address: string
           customer_name: string
@@ -328,6 +332,10 @@ export type Database = {
           assigned_at?: string | null
           city_id?: string | null
           closed_at?: string | null
+          closed_for_driver?: boolean
+          closed_for_driver_at?: string | null
+          closed_for_restaurant?: boolean
+          closed_for_restaurant_at?: string | null
           created_at?: string
           customer_address: string
           customer_name: string
@@ -352,6 +360,10 @@ export type Database = {
           assigned_at?: string | null
           city_id?: string | null
           closed_at?: string | null
+          closed_for_driver?: boolean
+          closed_for_driver_at?: string | null
+          closed_for_restaurant?: boolean
+          closed_for_restaurant_at?: string | null
           created_at?: string
           customer_address?: string
           customer_name?: string
