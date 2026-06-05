@@ -53,6 +53,7 @@ function CancelOrderButton({ orderId, createdAt, status, onDone }: { orderId: st
 
 export const Route = createFileRoute("/restaurant")({
   component: RestaurantPage,
+  ssr: false,
 });
 
 interface City { id: string; name: string; delivery_price: number }
