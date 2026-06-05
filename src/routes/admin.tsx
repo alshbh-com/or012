@@ -22,7 +22,7 @@ import {
   AlertTriangle, Phone,
 } from "lucide-react";
 import { toast } from "sonner";
-import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
+import { STATUS_AR, statusGroup } from "@/lib/i18n";
 import { ChatPanel } from "@/components/chat-panel";
 import { ComplaintsList } from "@/components/complaints";
 import { useNotificationPermission, notify } from "@/lib/notifications";
