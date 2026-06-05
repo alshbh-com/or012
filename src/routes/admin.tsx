@@ -169,7 +169,8 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
   const [rests, setRests] = useState<Record<string, string>>({});
   const [drvInfo, setDrvInfo] = useState<Record<string, { name: string; phone: string | null }>>({});
   const load = async () => {
-    let q = supabase.from("orders").select("*").eq("is_closed", false).order("created_at", { ascending: false });
+    // Admin sees the order while EITHER side is still open
+    let q = supabase.from("orders").select("*").or("closed_for_restaurant.eq.false,closed_for_driver.eq.false").order("created_at", { ascending: false });
     if (kind === "active") {
       q = q.not("driver_id", "is", null).in("status", ["pending", "accepted", "preparing", "picked_up", "on_the_way", "on_hold"]);
     } else {
@@ -207,6 +208,15 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, load).subscribe();
     return () => { ch.unsubscribe(); };
   }, [kind]);
+
+  const updateStatus = async (id: string, status: string) => {
+    const updates: Record<string, unknown> = { status };
+    if (status === "delivered") updates.delivered_at = new Date().toISOString();
+    const { error } = await (supabase.from("orders") as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } }).update(updates).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("تم التحديث");
+  };
+
   return (
     <Card className="p-4 shadow-soft">
       <div className="mb-3 flex items-center justify-between">
@@ -216,9 +226,16 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
       <div className="overflow-x-auto">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>المطعم</TableHead>
-            <TableHead>المندوب</TableHead><TableHead>التوصيل</TableHead><TableHead>الإجمالي</TableHead>
-            <TableHead>الحالة</TableHead>{kind === "active" && <TableHead>المؤقت</TableHead>}
+            <TableHead>#</TableHead>
+            <TableHead>المطعم</TableHead>
+            <TableHead>العنوان</TableHead>
+            <TableHead>العميل</TableHead>
+            <TableHead>المندوب</TableHead>
+            <TableHead>المنتجات</TableHead>
+            <TableHead>التوصيل</TableHead>
+            <TableHead>الإجمالي</TableHead>
+            <TableHead>الحالة</TableHead>
+            {kind === "active" && <TableHead>المؤقت</TableHead>}
           </TableRow></TableHeader>
           <TableBody>
             {orders.map((o) => {
@@ -228,8 +245,12 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
               return (
                 <TableRow key={o.id}>
                   <TableCell className="font-bold">{o.daily_number ?? "—"}</TableCell>
-                  <TableCell>{o.customer_name}</TableCell>
                   <TableCell>{rests[o.restaurant_id] ?? "—"}</TableCell>
+                  <TableCell className="max-w-[200px] text-xs whitespace-pre-wrap">{o.customer_address}</TableCell>
+                  <TableCell>
+                    <div className="font-medium">{o.customer_name}</div>
+                    <div className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</div>
+                  </TableCell>
                   <TableCell>
                     {info ? (
                       <div className="flex items-center gap-1.5">
@@ -242,9 +263,17 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
                       </div>
                     ) : "—"}
                   </TableCell>
+                  <TableCell>{Number(o.items_total ?? 0).toFixed(2)}</TableCell>
                   <TableCell>{Number(o.delivery_price).toFixed(2)}</TableCell>
                   <TableCell className="font-bold">{Number(o.total).toFixed(2)}</TableCell>
-                  <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
+                  <TableCell>
+                    <Select value={o.status} onValueChange={(v) => updateStatus(o.id, v)}>
+                      <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_AR[s]}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
                   {kind === "active" && (
                     <TableCell>
                       {o.status === "pending" && acceptDeadline && <AdminCountdown deadline={acceptDeadline} label="قبول" />}
@@ -254,7 +283,7 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
                 </TableRow>
               );
             })}
-            {orders.length === 0 && <TableRow><TableCell colSpan={kind === "active" ? 8 : 7} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
+            {orders.length === 0 && <TableRow><TableCell colSpan={kind === "active" ? 10 : 9} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
           </TableBody>
         </Table>
       </div>
