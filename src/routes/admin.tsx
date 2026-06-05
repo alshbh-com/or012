@@ -89,6 +89,7 @@ function AdminContent() {
     <DashboardLayout title="مسؤول" items={navItems}>
       <Tabs value={tab} onValueChange={setTab}>
         <TabsContent value="dashboard" className="mt-0 space-y-5">
+          <DashboardTiles onSelect={setTab} />
           <UnassignedTab />
           <MapTab />
         </TabsContent>
@@ -107,6 +108,44 @@ function AdminContent() {
         <TabsContent value="settings" className="mt-0"><SettingsTab /></TabsContent>
       </Tabs>
     </DashboardLayout>
+  );
+}
+
+function DashboardTiles({ onSelect }: { onSelect: (tab: string) => void }) {
+  const [today, setToday] = useState(0);
+  const [active, setActive] = useState(0);
+  const [online, setOnline] = useState(0);
+  const load = async () => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const [{ count: t }, { count: a }, { count: on }] = await Promise.all([
+      supabase.from("orders").select("*", { count: "exact", head: true }).gte("created_at", todayStr + "T00:00:00"),
+      supabase.from("orders").select("*", { count: "exact", head: true }).in("status", ["pending","accepted","preparing","picked_up","on_the_way","on_hold"]),
+      supabase.from("drivers").select("*", { count: "exact", head: true }).eq("is_online", true).eq("is_active", true),
+    ]);
+    setToday(t ?? 0); setActive(a ?? 0); setOnline(on ?? 0);
+  };
+  useEffect(() => {
+    load();
+    const ch = supabase.channel("admin-tiles")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "drivers" }, load).subscribe();
+    return () => { ch.unsubscribe(); };
+  }, []);
+  const tiles = [
+    { label: "طلبات اليوم", value: today, cls: "bg-gradient-primary", tab: "orders" },
+    { label: "طلبات نشطة", value: active, cls: "bg-gradient-cool", tab: "active" },
+    { label: "متابعة المندوبين", value: online, cls: "bg-gradient-success", tab: "drivers-status" },
+    { label: "بحث الطلبات", value: "🔍", cls: "bg-gradient-warm", tab: "orders" },
+  ];
+  return (
+    <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      {tiles.map((t) => (
+        <button key={t.label} onClick={() => onSelect(t.tab)} className={`${t.cls} p-4 rounded-xl border-0 shadow-pop text-right text-white`}>
+          <div className="text-[10px] uppercase opacity-90">{t.label}</div>
+          <div className="mt-1 text-2xl font-extrabold">{t.value}</div>
+        </button>
+      ))}
+    </div>
   );
 }
 
