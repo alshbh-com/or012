@@ -13,12 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { LayoutDashboard, Plus, Truck, Loader2, UtensilsCrossed, Trash2, X, Package, BarChart3, XCircle } from "lucide-react";
+import { LayoutDashboard, Plus, Truck, Loader2, UtensilsCrossed, Trash2, X, Package, BarChart3, XCircle, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 
-const CANCEL_WINDOW_MS = 5 * 60 * 1000;
+const CANCEL_WINDOW_MS = 3 * 60 * 1000;
 
 function CancelOrderButton({ orderId, createdAt, status, onDone }: { orderId: string; createdAt: string; status: string; onDone?: () => void }) {
   const [now, setNow] = useState(Date.now());
