@@ -19,7 +19,7 @@ import { ComplaintsList } from "@/components/complaints";
 import { DriversMap, type MapDriver } from "@/components/drivers-map";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 
-export const Route = createFileRoute("/driver")({ component: DriverPage });
+export const Route = createFileRoute("/driver")({ component: DriverPage, ssr: false });
 
 const NEXT_STATUS: Record<string, string[]> = {
   accepted: ["picked_up"],
