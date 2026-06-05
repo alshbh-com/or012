@@ -61,6 +61,7 @@ interface Order {
   id: string; order_number: string; daily_number: number | null; customer_name: string; customer_phone: string;
   customer_address: string; items_total: number; delivery_price: number; total: number;
   status: string; driver_id: string | null; created_at: string; notes: string | null; city_id: string | null;
+  restaurant_id?: string; closed_for_restaurant?: boolean;
 }
 
 function RestaurantPage() {
