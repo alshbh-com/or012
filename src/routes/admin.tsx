@@ -375,6 +375,7 @@ function UnassignedTab() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [driverNames, setDriverNames] = useState<Record<string, string>>({});
   const load = async () => {
     const [{ data: o }, { data: r }, { data: d }] = await Promise.all([
       supabase.from("orders").select("*").is("driver_id", null).in("status", ["pending", "accepted", "preparing"]).order("created_at", { ascending: false }),
@@ -383,7 +384,20 @@ function UnassignedTab() {
     ]);
     if (o) setOrders(o as Order[]);
     if (r) setRestaurants(r as Restaurant[]);
-    if (d) setDrivers(d as Driver[]);
+    if (d) {
+      const ds = d as Driver[];
+      setDrivers(ds);
+      const uids = ds.map((x) => x.user_id).filter(Boolean);
+      if (uids.length) {
+        const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", uids);
+        const m: Record<string, string> = {};
+        ds.forEach((x) => {
+          const p = profs?.find((pp) => pp.id === x.user_id);
+          m[x.id] = (p?.full_name as string) || x.phone || x.id.slice(0, 6);
+        });
+        setDriverNames(m);
+      }
+    }
   };
   useEffect(() => {
     load();
