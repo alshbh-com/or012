@@ -434,7 +434,7 @@ function UnassignedTab() {
                   <Select onValueChange={(v) => assign(o.id, v)}>
                     <SelectTrigger className="w-44 h-8"><SelectValue placeholder="اختر مندوب…" /></SelectTrigger>
                     <SelectContent>
-                      {drivers.map((d) => <SelectItem key={d.id} value={d.id}>{d.phone ?? d.id.slice(0, 8)}</SelectItem>)}
+                      {drivers.map((d) => <SelectItem key={d.id} value={d.id}>{driverNames[d.id] ?? d.phone ?? d.id.slice(0, 8)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </TableCell>
