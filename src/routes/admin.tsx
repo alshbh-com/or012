@@ -321,29 +321,30 @@ function MapTab() {
       const nameMap = new Map((profs ?? []).map((p) => [p.id as string, p.full_name as string]));
       const restMap = new Map((rs ?? []).map((r) => [r.id as string, r.name as string]));
       const activeByDriver = new Map<string, number>();
-      const firstActiveByDriver = new Map<string, { restaurantName: string | null; customerAddress: string | null }>();
+      const ordersByDriver = new Map<string, Array<{ restaurantName: string | null; customerAddress: string | null }>>();
       (ords ?? []).forEach((o) => {
         if (o.driver_id && statusGroup(o.status as string) === "active") {
           const did = o.driver_id as string;
           activeByDriver.set(did, (activeByDriver.get(did) ?? 0) + 1);
-          if (!firstActiveByDriver.has(did)) {
-            firstActiveByDriver.set(did, {
-              restaurantName: restMap.get(o.restaurant_id as string) ?? null,
-              customerAddress: (o.customer_address as string) ?? null,
-            });
-          }
+          const arr = ordersByDriver.get(did) ?? [];
+          arr.push({
+            restaurantName: restMap.get(o.restaurant_id as string) ?? null,
+            customerAddress: (o.customer_address as string) ?? null,
+          });
+          ordersByDriver.set(did, arr);
         }
       });
       setDrivers(
         ds.filter((d) => d.current_lat != null && d.current_lng != null).map((d) => {
           const cnt = activeByDriver.get(d.id as string) ?? 0;
-          const info = firstActiveByDriver.get(d.id as string);
+          const list = ordersByDriver.get(d.id as string) ?? [];
           return {
             id: d.id as string, lat: Number(d.current_lat), lng: Number(d.current_lng),
             label: nameMap.get(d.user_id as string) || d.phone || (d.id as string).slice(0, 8),
             online: !!d.is_online, hasOrders: cnt > 0, activeCount: cnt,
-            restaurantName: info?.restaurantName ?? null,
-            customerAddress: info?.customerAddress ?? null,
+            restaurantName: list[0]?.restaurantName ?? null,
+            customerAddress: list[0]?.customerAddress ?? null,
+            activeOrders: list,
           };
         }),
       );
