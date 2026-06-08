@@ -229,7 +229,7 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
   return (
     <Card className="p-4 shadow-soft">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-bold neon-text">{kind === "active" ? "الطلبات النشطة" : "الطلبات القديمة"}</h2>
+        <h2 className="text-lg font-bold neon-text">{kind === "active" ? "الطلبات النشطة" : "سلة الطلبات المحذوفة"}</h2>
         <Badge variant="outline">{orders.length}</Badge>
       </div>
       <div className="overflow-x-auto">
