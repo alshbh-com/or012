@@ -424,16 +424,18 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!cityId) { toast.error("اختر المدينة"); return; }
+    if (!address.trim()) { toast.error("تفاصيل العنوان مطلوبة"); return; }
     setLoading(true);
     const itemsLine = cart.length > 0 ? cart.map((i) => `${i.name} × ${i.qty}`).join("، ") : "";
     const combined = [itemsLine, driverNotes && `📝 للمندوب: ${driverNotes}`].filter(Boolean).join("\n");
     const cityName = city?.name ?? "";
-    const finalAddress = `(${cityName})${address.trim() ? " " + address.trim() : ""}`;
-    const { error } = await supabase.from("orders").insert({
+    const finalAddress = `(${cityName}) ${address.trim()}`;
+    const { error } = await (supabase.from("orders") as unknown as { insert: (u: Record<string, unknown>) => Promise<{ error: { message: string } | null }> }).insert({
       restaurant_id: restaurantId,
       customer_name: name,
       customer_phone: phone,
       customer_address: finalAddress,
+      customer_location_url: customerLocationUrl.trim() || null,
       city_id: cityId || null,
       items_total: itemsTotal,
       delivery_price: Number(deliveryPrice),
@@ -444,6 +446,7 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
     toast.success("تم إنشاء الطلب");
     onDone();
   };
+
 
   return (
     <form onSubmit={submit} className="space-y-3">
