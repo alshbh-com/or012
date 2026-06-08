@@ -533,9 +533,10 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
     <Card className="p-5 overflow-x-auto shadow-soft">
       <Table>
         <TableHeader><TableRow>
-          <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>المندوب</TableHead>
-          <TableHead>التوصيل</TableHead><TableHead>الإجمالي</TableHead><TableHead>الحالة</TableHead>
-          <TableHead>إلغاء</TableHead>
+          <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>العنوان</TableHead>
+          <TableHead>المندوب</TableHead>
+          <TableHead>المنتجات</TableHead><TableHead>التوصيل</TableHead><TableHead>الإجمالي</TableHead>
+          <TableHead>الحالة</TableHead><TableHead>إلغاء</TableHead>
         </TableRow></TableHeader>
         <TableBody>
           {orders.map((o) => {
@@ -547,6 +548,7 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
                   <div className="font-medium">{o.customer_name}</div>
                   <div className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</div>
                 </TableCell>
+                <TableCell className="max-w-[220px] text-xs whitespace-pre-wrap">{o.customer_address}</TableCell>
                 <TableCell>
                   {info ? (
                     <div className="flex items-center gap-1.5">
@@ -559,6 +561,7 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
                     </div>
                   ) : <span className="text-xs text-muted-foreground">— لم يُعيَّن</span>}
                 </TableCell>
+                <TableCell>{Number(o.items_total ?? 0).toFixed(2)}</TableCell>
                 <TableCell className="text-accent">{Number(o.delivery_price).toFixed(2)}</TableCell>
                 <TableCell className="font-semibold">{Number(o.total).toFixed(2)}</TableCell>
                 <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
@@ -566,6 +569,7 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
               </TableRow>
             );
           })}
+
         </TableBody>
       </Table>
     </Card>
