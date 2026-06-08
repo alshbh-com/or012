@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { LayoutDashboard, MapPin, Phone, Truck, Map as MapIcon, MessagesSquare, AlertTriangle, Store, CheckCircle2, BarChart3 } from "lucide-react";
 import { Input } from "@/components/ui/input";
