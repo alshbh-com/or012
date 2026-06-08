@@ -206,26 +206,40 @@ function Body() {
     : [];
 
   const renderOrders = (list: Order[]) => (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-3 md:grid-cols-2">
       {list.map((o) => {
         const r = restaurants[o.restaurant_id];
         const restMaps = r?.location_url
           ? r.location_url
           : r?.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.address)}` : null;
-        const custMaps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customer_address)}`;
+        const custLocUrl = (o as Order & { customer_location_url?: string | null }).customer_location_url || null;
         const isPending = o.status === "pending";
-        // 2 min from assignment to driver (assigned_at), fallback to created_at
         const acceptStart = o.assigned_at ?? o.created_at;
         const acceptDeadline = new Date(acceptStart).getTime() + 2 * 60 * 1000;
-        // 15 min from accepted_at to pickup
         const pickupDeadline = o.accepted_at ? new Date(o.accepted_at).getTime() + 15 * 60 * 1000 : null;
-        const next = NEXT_STATUS[o.status] ?? [];
+
+        const confirmPickup = async () => {
+          if (!confirm("تأكيد استلام الطلب من المطعم؟")) return;
+          await updateStatus(o.id, "picked_up");
+        };
+        const cancelPickup = async () => {
+          if (!confirm("هل تريد رفض/إلغاء هذا الطلب؟")) return;
+          await updateStatus(o.id, "cancelled");
+        };
+        const confirmDeliver = async () => {
+          if (!confirm("تأكيد تسليم الطلب للعميل؟")) return;
+          await updateStatus(o.id, "delivered");
+        };
+        const cancelDeliver = async () => {
+          if (!confirm("هل تريد تسجيل الطلب كمرتجع؟")) return;
+          await updateStatus(o.id, "returned");
+        };
 
         return (
           <Card key={o.id} className="p-3 shadow-soft neon-border text-sm">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-primary text-base font-extrabold text-primary-foreground shadow-pop">{o.daily_number ?? "—"}</span>
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-primary text-sm font-extrabold text-primary-foreground shadow-pop">{o.daily_number ?? "—"}</span>
                 <div>
                   <div className="font-mono text-[10px] text-muted-foreground" dir="ltr">{o.order_number}</div>
                 </div>
@@ -233,88 +247,105 @@ function Body() {
               <Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge>
             </div>
 
-            {/* Timers */}
             <div className="mt-2 flex flex-wrap gap-2">
               {isPending && <Countdown deadline={acceptDeadline} label="للقبول" />}
               {o.status === "accepted" && pickupDeadline && <Countdown deadline={pickupDeadline} label="للاستلام" />}
             </div>
 
             {/* Restaurant */}
-            <div className="mt-3 rounded-lg bg-accent/10 border border-accent/30 p-3 space-y-2">
+            <div className="mt-2 rounded-lg bg-accent/10 border border-accent/30 p-2 space-y-1.5">
               <div className="flex items-center gap-2">
                 <Store className="h-4 w-4 text-accent" />
                 <span className="font-bold neon-text-accent">{r?.name ?? "المطعم"}</span>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {restMaps && (
-                  <Button asChild size="sm" variant="outline" className="h-7">
-                    <a href={restMaps} target="_blank" rel="noreferrer"><MapPin className="ml-1 h-3.5 w-3.5" />موقع المطعم</a>
+                  <Button asChild size="sm" variant="outline" className="h-6 text-xs">
+                    <a href={restMaps} target="_blank" rel="noreferrer"><MapPin className="ml-1 h-3 w-3" />موقع</a>
                   </Button>
                 )}
                 {r?.phone && (
-                  <Button asChild size="sm" variant="outline" className="h-7">
+                  <Button asChild size="sm" variant="outline" className="h-6 text-xs">
                     <a href={`tel:${r.phone}`} dir="ltr"><Phone className="ml-1 h-3 w-3" />اتصال</a>
                   </Button>
                 )}
               </div>
-              {r?.address && <div className="text-xs text-muted-foreground">{r.address}</div>}
             </div>
 
             {/* Customer */}
-            <div className="mt-3 rounded-lg bg-primary/10 border border-primary/30 p-3 space-y-2">
+            <div className="mt-2 rounded-lg bg-primary/10 border border-primary/30 p-2 space-y-1.5">
               <div className="font-bold neon-text">{o.customer_name}</div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button asChild size="sm" variant="outline" className="h-8">
-                  <a href={`tel:${o.customer_phone}`} dir="ltr"><Phone className="ml-1 h-3.5 w-3.5" />اتصال</a>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                  <a href={`tel:${o.customer_phone}`} dir="ltr"><Phone className="ml-1 h-3 w-3" />اتصال</a>
                 </Button>
-                <Button asChild size="sm" variant="outline" className="h-8 border-success/50 text-success hover:bg-success/10">
+                <Button asChild size="sm" variant="outline" className="h-7 text-xs border-success/50 text-success hover:bg-success/10">
                   <a href={waLink(o.customer_phone)} target="_blank" rel="noreferrer" dir="ltr">
-                    <MessagesSquare className="ml-1 h-3.5 w-3.5" />WhatsApp
+                    <MessagesSquare className="ml-1 h-3 w-3" />WhatsApp
                   </a>
                 </Button>
-                <span className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</span>
+                {custLocUrl && (
+                  <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                    <a href={custLocUrl} target="_blank" rel="noreferrer"><MapPin className="ml-1 h-3 w-3" />لوكيشن</a>
+                  </Button>
+                )}
               </div>
-              <a href={custMaps} target="_blank" rel="noreferrer" className="flex items-start gap-2 text-sm text-primary hover:underline">
-                <MapPin className="h-4 w-4 mt-0.5" /><span>{o.customer_address}</span>
-              </a>
+              <div className="text-sm whitespace-pre-wrap">{o.customer_address}</div>
+              <div className="text-[10px] text-muted-foreground" dir="ltr">{o.customer_phone}</div>
             </div>
 
             {o.notes && (
-              <div className="mt-3 rounded-md bg-muted p-2 text-xs whitespace-pre-wrap">
+              <div className="mt-2 rounded-md bg-muted p-2 text-xs whitespace-pre-wrap">
                 <div className="font-semibold mb-1">تفاصيل الطلب:</div>
                 {o.notes}
               </div>
             )}
 
-            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-sm">
-              <div className="rounded bg-muted/40 p-2 text-center">
-                <div className="text-[10px] text-muted-foreground">سعر التوصيل</div>
+            <div className="mt-2 grid grid-cols-3 gap-1.5 border-t border-border pt-2 text-xs">
+              <div className="rounded bg-muted/40 p-1.5 text-center">
+                <div className="text-[9px] text-muted-foreground">المنتجات</div>
+                <div className="font-bold">{Number(o.items_total ?? 0).toFixed(2)}</div>
+              </div>
+              <div className="rounded bg-muted/40 p-1.5 text-center">
+                <div className="text-[9px] text-muted-foreground">التوصيل</div>
                 <div className="font-bold text-accent">{Number(o.delivery_price).toFixed(2)}</div>
               </div>
-              <div className="rounded bg-muted/40 p-2 text-center">
-                <div className="text-[10px] text-muted-foreground">المبلغ المستحق على العميل</div>
+              <div className="rounded bg-muted/40 p-1.5 text-center">
+                <div className="text-[9px] text-muted-foreground">الإجمالي</div>
                 <div className="font-bold neon-text">{Number(o.total).toFixed(2)}</div>
               </div>
             </div>
 
-            {/* Actions */}
+            {/* Actions: 2-step flow */}
             {isPending ? (
-              <Button className="mt-3 w-full bg-gradient-primary shadow-pop" onClick={() => acceptOrder(o.id)}>
+              <Button className="mt-2 w-full bg-gradient-primary shadow-pop h-10" onClick={() => acceptOrder(o.id)}>
                 <CheckCircle2 className="ml-2 h-4 w-4" /> قبول الطلب
               </Button>
-            ) : next.length > 0 ? (
-              <div className="mt-3">
-                <Select onValueChange={(v) => updateStatus(o.id, v)}>
-                  <SelectTrigger><SelectValue placeholder="تحديث الحالة…" /></SelectTrigger>
-                  <SelectContent>
-                    {next.map((s) => <SelectItem key={s} value={s}>{STATUS_AR[s] ?? s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+            ) : (o.status === "accepted" || o.status === "preparing") ? (
+              <div className="mt-2 space-y-1.5">
+                <Button className="w-full bg-gradient-primary shadow-pop h-11 text-base font-bold" onClick={confirmPickup}>
+                  استلام الطلب
+                </Button>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Button size="sm" className="bg-success hover:bg-success/90 text-white" onClick={confirmPickup}>تأكيد الاستلام</Button>
+                  <Button size="sm" variant="destructive" onClick={cancelPickup}>إلغاء</Button>
+                </div>
+              </div>
+            ) : (o.status === "picked_up" || o.status === "on_the_way") ? (
+              <div className="mt-2 space-y-1.5">
+                <Button className="w-full bg-gradient-success shadow-pop h-11 text-base font-bold" onClick={confirmDeliver}>
+                  تسليم الطلب
+                </Button>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Button size="sm" className="bg-success hover:bg-success/90 text-white" onClick={confirmDeliver}>تأكيد التسليم</Button>
+                  <Button size="sm" variant="destructive" onClick={cancelDeliver}>إلغاء (مرتجع)</Button>
+                </div>
               </div>
             ) : null}
           </Card>
         );
       })}
+
       {list.length === 0 && (
         <Card className="p-8 text-center text-sm text-muted-foreground md:col-span-2">لا توجد طلبات في هذه القائمة.</Card>
       )}
