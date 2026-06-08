@@ -462,7 +462,16 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
         </Select>
         <p className="text-[10px] text-muted-foreground">سيتم كتابة اسم المدينة بين قوسين قبل تفاصيل العنوان تلقائياً.</p>
       </div>
-      <div className="space-y-1.5"><Label>تفاصيل العنوان (اختياري)</Label><Textarea value={address} onChange={(e) => setAddress(e.target.value)} placeholder="مثال: شارع 9 - عمارة 12 - الدور الثالث" /></div>
+      <div className="space-y-1.5">
+        <Label>تفاصيل العنوان <span className="text-destructive">*</span></Label>
+        <Textarea value={address} onChange={(e) => setAddress(e.target.value)} required />
+      </div>
+      <div className="space-y-1.5">
+        <Label>رابط لوكيشن العميل (اختياري)</Label>
+        <Input value={customerLocationUrl} onChange={(e) => setCustomerLocationUrl(e.target.value)} placeholder="https://maps.google.com/..." dir="ltr" />
+        <p className="text-[10px] text-muted-foreground">إذا وجد سيظهر للمندوب كرابط للخرائط.</p>
+      </div>
+
 
 
       {products.length > 0 && (
