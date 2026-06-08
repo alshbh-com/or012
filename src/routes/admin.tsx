@@ -741,9 +741,11 @@ function RestaurantsTab() {
       </div>
       <div className="overflow-x-auto">
         <Table>
-          <TableHeader><TableRow><TableHead>الاسم</TableHead><TableHead>الهاتف</TableHead><TableHead>المدينة</TableHead><TableHead>الحالة</TableHead><TableHead className="w-40">إجراءات</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>الاسم</TableHead><TableHead>الهاتف</TableHead><TableHead>المدينة</TableHead><TableHead>الحالة</TableHead><TableHead>أوف لاين</TableHead><TableHead className="w-40">إجراءات</TableHead></TableRow></TableHeader>
           <TableBody>
-            {items.map((r) => (
+            {items.map((r) => {
+              const ro = r as Restaurant & { is_offline?: boolean };
+              return (
               <TableRow key={r.id}>
                 <TableCell className="font-medium">{r.name}</TableCell>
                 <TableCell dir="ltr">{r.phone ?? "—"}</TableCell>
@@ -762,11 +764,26 @@ function RestaurantsTab() {
                   </div>
                 </TableCell>
                 <TableCell>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={!!ro.is_offline}
+                      onCheckedChange={async (v) => {
+                        await (supabase.from("restaurants") as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<unknown> } }).update({ is_offline: v }).eq("id", r.id);
+                        toast.success(v ? "تم إيقاف الاستلام (المكتب أوف لاين)" : "تم فتح الاستلام");
+                        load();
+                      }}
+                    />
+                    <Badge variant={ro.is_offline ? "destructive" : "outline"}>{ro.is_offline ? "أوف لاين" : "متاح"}</Badge>
+                  </div>
+                </TableCell>
+                <TableCell>
                   <UserActions userId={r.user_id} entity={{ table: "restaurants", id: r.id, label: r.name }} cities={cities} role="restaurant" current={{ name: r.name, phone: r.phone ?? "", city_id: r.city_id, address: r.address, location_url: r.location_url }} onChange={load} />
                 </TableCell>
               </TableRow>
-            ))}
-            {items.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground">لا توجد مطاعم</TableCell></TableRow>}
+              );
+            })}
+            {items.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">لا توجد مطاعم</TableCell></TableRow>}
+
           </TableBody>
         </Table>
       </div>
