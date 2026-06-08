@@ -390,7 +390,9 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [customerLocationUrl, setCustomerLocationUrl] = useState("");
   const [cityId, setCityId] = useState("");
+
   const [cart, setCart] = useState<Array<{ name: string; price: number; qty: number }>>([]);
   const [productName, setProductName] = useState("");
   const [productPrice, setProductPrice] = useState("");
