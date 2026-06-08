@@ -76,6 +76,7 @@ function RestaurantPage() {
 function Body() {
   const { user } = useAuth();
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -92,6 +93,7 @@ function Body() {
     const { data } = await supabase.from("orders").select("*").eq("restaurant_id", rid).eq("closed_for_restaurant", false).order("created_at", { ascending: false });
     if (data) setOrders(data as Order[]);
   };
+
 
   const loadProducts = async (rid: string) => {
     const { data } = await supabase.from("products").select("*").eq("restaurant_id", rid).order("name");
