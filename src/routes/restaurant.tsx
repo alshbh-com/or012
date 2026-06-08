@@ -190,14 +190,22 @@ function Body() {
               <h1 className="text-2xl font-extrabold">لوحة المطعم</h1>
               <p className="mt-1 text-xs opacity-90">إدارة طلباتك بسهولة.</p>
             </div>
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild><Button size="lg" className="bg-white text-primary hover:bg-white/90 shadow-pop"><Plus className="ml-2 h-5 w-5" />طلب جديد</Button></DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>إنشاء طلب جديد</DialogTitle></DialogHeader>
-                <NewOrderForm restaurantId={restaurantId} cities={cities} products={products} onDone={() => { setOpen(false); loadOrders(restaurantId); }} />
-              </DialogContent>
-            </Dialog>
+            <div className="flex flex-col items-end gap-1">
+              <Dialog open={open && !isOffline} onOpenChange={(v) => !isOffline && setOpen(v)}>
+                <DialogTrigger asChild>
+                  <Button size="lg" disabled={isOffline} className="bg-white text-primary hover:bg-white/90 shadow-pop disabled:opacity-60">
+                    <Plus className="ml-2 h-5 w-5" />طلب جديد
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader><DialogTitle>إنشاء طلب جديد</DialogTitle></DialogHeader>
+                  <NewOrderForm restaurantId={restaurantId} cities={cities} products={products} onDone={() => { setOpen(false); loadOrders(restaurantId); }} />
+                </DialogContent>
+              </Dialog>
+              {isOffline && <span className="text-[11px] font-bold bg-destructive/20 text-destructive px-2 py-0.5 rounded-md">المكتب أوف لاين</span>}
+            </div>
           </div>
+
 
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
             <button onClick={() => setActiveTab("orders")} className="text-right bg-gradient-cool p-4 rounded-xl border-0 shadow-pop text-white"><div className="text-[10px] uppercase opacity-90">نشطة الآن</div><div className="text-2xl font-extrabold">{totals.active}</div></button>
