@@ -310,6 +310,7 @@ export type Database = {
           closed_for_restaurant_at: string | null
           created_at: string
           customer_address: string
+          customer_location_url: string | null
           customer_name: string
           customer_phone: string
           daily_number: number | null
@@ -338,6 +339,7 @@ export type Database = {
           closed_for_restaurant_at?: string | null
           created_at?: string
           customer_address: string
+          customer_location_url?: string | null
           customer_name: string
           customer_phone: string
           daily_number?: number | null
@@ -366,6 +368,7 @@ export type Database = {
           closed_for_restaurant_at?: string | null
           created_at?: string
           customer_address?: string
+          customer_location_url?: string | null
           customer_name?: string
           customer_phone?: string
           daily_number?: number | null
@@ -471,6 +474,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          is_offline: boolean
           location_url: string | null
           logo_url: string | null
           name: string
@@ -484,6 +488,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_offline?: boolean
           location_url?: string | null
           logo_url?: string | null
           name: string
@@ -497,6 +502,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_offline?: boolean
           location_url?: string | null
           logo_url?: string | null
           name?: string
