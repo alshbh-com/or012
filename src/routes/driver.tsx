@@ -21,12 +21,8 @@ import { useNotificationPermission, notify } from "@/lib/notifications";
 
 export const Route = createFileRoute("/driver")({ component: DriverPage, ssr: false });
 
-const NEXT_STATUS: Record<string, string[]> = {
-  accepted: ["picked_up"],
-  preparing: ["picked_up"],
-  picked_up: ["on_the_way"],
-  on_the_way: ["delivered", "returned"],
-};
+
+
 
 interface Order {
   id: string; order_number: string; daily_number: number | null; customer_name: string; customer_phone: string;
