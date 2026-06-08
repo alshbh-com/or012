@@ -58,6 +58,7 @@ function AdminPage() {
 function AdminContent() {
   useNotificationPermission();
   const [tab, setTab] = useState<string>("dashboard");
+  const [pendingDateFilter, setPendingDateFilter] = useState<string>("");
   useEffect(() => {
     const ch = supabase.channel("admin-new-orders")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (p) => {
@@ -68,14 +69,19 @@ function AdminContent() {
     return () => { ch.unsubscribe(); };
   }, []);
 
+  const goOrdersToday = () => {
+    setPendingDateFilter(new Date().toISOString().slice(0, 10));
+    setTab("orders");
+  };
+
   const navItems: NavItem[] = [
     { label: "اللوحة", icon: LayoutDashboard, onSelect: () => setTab("dashboard") },
     { label: "الطلبات النشطة", icon: Package, onSelect: () => setTab("active") },
-    { label: "الطلبات القديمة", icon: Package, onSelect: () => setTab("old") },
+    { label: "سلة الطلبات المحذوفة", icon: Trash2, onSelect: () => setTab("old") },
     { label: "بحث الطلبات", icon: Search, onSelect: () => setTab("orders") },
     { label: "حالة المندوبين", icon: Truck, onSelect: () => setTab("drivers-status") },
     { label: "الحسابات", icon: LayoutDashboard, onSelect: () => setTab("accounts") },
-    { label: "التقارير", icon: LayoutDashboard, onSelect: () => setTab("reports") },
+    { label: "إغلاق وتصفير", icon: SettingsIcon, onSelect: () => setTab("reports") },
     { label: "التتبع على الخريطة", icon: MapIcon, onSelect: () => setTab("map") },
     { label: "المحادثات", icon: MessagesSquare, onSelect: () => setTab("chat") },
     { label: "المدن", icon: MapPin, onSelect: () => setTab("cities") },
@@ -89,16 +95,16 @@ function AdminContent() {
     <DashboardLayout title="مسؤول" items={navItems}>
       <Tabs value={tab} onValueChange={setTab}>
         <TabsContent value="dashboard" className="mt-0 space-y-5">
-          <DashboardTiles onSelect={setTab} />
+          <DashboardTiles onSelect={setTab} onTodayClick={goOrdersToday} />
           <UnassignedTab />
           <MapTab />
         </TabsContent>
         <TabsContent value="active" className="mt-0"><ActiveOrAssignedTab kind="active" /></TabsContent>
         <TabsContent value="old" className="mt-0"><ActiveOrAssignedTab kind="old" /></TabsContent>
-        <TabsContent value="orders" className="mt-0"><OrdersTab /></TabsContent>
+        <TabsContent value="orders" className="mt-0"><OrdersTab initialDate={pendingDateFilter} /></TabsContent>
         <TabsContent value="drivers-status" className="mt-0"><DriversStatusTab /></TabsContent>
         <TabsContent value="accounts" className="mt-0"><AccountsTab /></TabsContent>
-        <TabsContent value="reports" className="mt-0"><ReportsTab /></TabsContent>
+        <TabsContent value="reports" className="mt-0"><CloseResetTab /></TabsContent>
         <TabsContent value="map" className="mt-0"><MapTab /></TabsContent>
         <TabsContent value="chat" className="mt-0"><ChatPanel /></TabsContent>
         <TabsContent value="cities" className="mt-0"><CitiesTab /></TabsContent>
@@ -111,7 +117,7 @@ function AdminContent() {
   );
 }
 
-function DashboardTiles({ onSelect }: { onSelect: (tab: string) => void }) {
+function DashboardTiles({ onSelect, onTodayClick }: { onSelect: (tab: string) => void; onTodayClick: () => void }) {
   const [today, setToday] = useState(0);
   const [active, setActive] = useState(0);
   const [online, setOnline] = useState(0);
@@ -132,15 +138,15 @@ function DashboardTiles({ onSelect }: { onSelect: (tab: string) => void }) {
     return () => { ch.unsubscribe(); };
   }, []);
   const tiles = [
-    { label: "طلبات اليوم", value: today, cls: "bg-gradient-primary", tab: "orders" },
-    { label: "طلبات نشطة", value: active, cls: "bg-gradient-cool", tab: "active" },
-    { label: "متابعة المندوبين", value: online, cls: "bg-gradient-success", tab: "drivers-status" },
-    { label: "بحث الطلبات", value: "🔍", cls: "bg-gradient-warm", tab: "orders" },
+    { label: "طلبات اليوم", value: today, cls: "bg-gradient-primary", onClick: onTodayClick },
+    { label: "طلبات نشطة", value: active, cls: "bg-gradient-cool", onClick: () => onSelect("active") },
+    { label: "متابعة المندوبين", value: online, cls: "bg-gradient-success", onClick: () => onSelect("drivers-status") },
+    { label: "بحث الطلبات", value: "🔍", cls: "bg-gradient-warm", onClick: () => onSelect("orders") },
   ];
   return (
     <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
       {tiles.map((t) => (
-        <button key={t.label} onClick={() => onSelect(t.tab)} className={`${t.cls} p-4 rounded-xl border-0 shadow-pop text-right text-white`}>
+        <button key={t.label} onClick={t.onClick} className={`${t.cls} p-4 rounded-xl border-0 shadow-pop text-right text-white`}>
           <div className="text-[10px] uppercase opacity-90">{t.label}</div>
           <div className="mt-1 text-2xl font-extrabold">{t.value}</div>
         </button>
@@ -148,6 +154,7 @@ function DashboardTiles({ onSelect }: { onSelect: (tab: string) => void }) {
     </div>
   );
 }
+
 
 function AdminCountdown({ deadline, label }: { deadline: number; label: string }) {
   const [now, setNow] = useState(Date.now());
