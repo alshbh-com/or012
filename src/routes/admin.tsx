@@ -427,7 +427,9 @@ function UnassignedTab() {
         <Table>
           <TableHeader><TableRow>
             <TableHead>#</TableHead><TableHead>المطعم</TableHead><TableHead>العميل</TableHead>
-            <TableHead>العنوان</TableHead><TableHead>الإجمالي</TableHead><TableHead>إسناد لمندوب</TableHead>
+            <TableHead>العنوان</TableHead>
+            <TableHead>المنتجات</TableHead><TableHead>التوصيل</TableHead><TableHead>الإجمالي</TableHead>
+            <TableHead>إسناد لمندوب</TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {orders.map((o) => (
@@ -439,6 +441,8 @@ function UnassignedTab() {
                   <div className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</div>
                 </TableCell>
                 <TableCell className="max-w-[220px] truncate text-sm">{o.customer_address}</TableCell>
+                <TableCell>{Number(o.items_total ?? 0).toFixed(2)}</TableCell>
+                <TableCell className="text-accent">{Number(o.delivery_price ?? 0).toFixed(2)}</TableCell>
                 <TableCell className="font-semibold">{Number(o.total).toFixed(2)}</TableCell>
                 <TableCell>
                   <Select onValueChange={(v) => assign(o.id, v)}>
@@ -450,7 +454,8 @@ function UnassignedTab() {
                 </TableCell>
               </TableRow>
             ))}
-            {orders.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">لا توجد طلبات في انتظار الإسناد</TableCell></TableRow>}
+            {orders.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-sm text-muted-foreground">لا توجد طلبات في انتظار الإسناد</TableCell></TableRow>}
+
           </TableBody>
         </Table>
       </div>
