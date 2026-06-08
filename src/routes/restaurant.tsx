@@ -76,6 +76,7 @@ function RestaurantPage() {
 function Body() {
   const { user } = useAuth();
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -92,6 +93,7 @@ function Body() {
     const { data } = await supabase.from("orders").select("*").eq("restaurant_id", rid).eq("closed_for_restaurant", false).order("created_at", { ascending: false });
     if (data) setOrders(data as Order[]);
   };
+
 
   const loadProducts = async (rid: string) => {
     const { data } = await supabase.from("products").select("*").eq("restaurant_id", rid).order("name");
@@ -114,9 +116,10 @@ function Body() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data: r } = await supabase.from("restaurants").select("id").eq("user_id", user.id).maybeSingle();
+      const { data: r } = await supabase.from("restaurants").select("id, is_offline").eq("user_id", user.id).maybeSingle();
       if (!r) return;
       setRestaurantId(r.id);
+      setIsOffline(!!(r as { is_offline?: boolean }).is_offline);
       loadOrders(r.id);
       loadProducts(r.id);
       const { data: c } = await supabase.from("cities").select("*").order("name");
@@ -124,6 +127,17 @@ function Body() {
       loadDrivers();
     })();
   }, [user]);
+
+  // Live updates to is_offline flag
+  useEffect(() => {
+    if (!restaurantId) return;
+    const ch = supabase.channel(`rest-info-${restaurantId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "restaurants", filter: `id=eq.${restaurantId}` },
+        (p) => setIsOffline(!!(p.new as { is_offline?: boolean }).is_offline))
+      .subscribe();
+    return () => { ch.unsubscribe(); };
+  }, [restaurantId]);
+
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -176,14 +190,22 @@ function Body() {
               <h1 className="text-2xl font-extrabold">لوحة المطعم</h1>
               <p className="mt-1 text-xs opacity-90">إدارة طلباتك بسهولة.</p>
             </div>
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild><Button size="lg" className="bg-white text-primary hover:bg-white/90 shadow-pop"><Plus className="ml-2 h-5 w-5" />طلب جديد</Button></DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>إنشاء طلب جديد</DialogTitle></DialogHeader>
-                <NewOrderForm restaurantId={restaurantId} cities={cities} products={products} onDone={() => { setOpen(false); loadOrders(restaurantId); }} />
-              </DialogContent>
-            </Dialog>
+            <div className="flex flex-col items-end gap-1">
+              <Dialog open={open && !isOffline} onOpenChange={(v) => !isOffline && setOpen(v)}>
+                <DialogTrigger asChild>
+                  <Button size="lg" disabled={isOffline} className="bg-white text-primary hover:bg-white/90 shadow-pop disabled:opacity-60">
+                    <Plus className="ml-2 h-5 w-5" />طلب جديد
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader><DialogTitle>إنشاء طلب جديد</DialogTitle></DialogHeader>
+                  <NewOrderForm restaurantId={restaurantId} cities={cities} products={products} onDone={() => { setOpen(false); loadOrders(restaurantId); }} />
+                </DialogContent>
+              </Dialog>
+              {isOffline && <span className="text-[11px] font-bold bg-destructive/20 text-destructive px-2 py-0.5 rounded-md">المكتب أوف لاين</span>}
+            </div>
           </div>
+
 
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
             <button onClick={() => setActiveTab("orders")} className="text-right bg-gradient-cool p-4 rounded-xl border-0 shadow-pop text-white"><div className="text-[10px] uppercase opacity-90">نشطة الآن</div><div className="text-2xl font-extrabold">{totals.active}</div></button>
@@ -368,7 +390,9 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [customerLocationUrl, setCustomerLocationUrl] = useState("");
   const [cityId, setCityId] = useState("");
+
   const [cart, setCart] = useState<Array<{ name: string; price: number; qty: number }>>([]);
   const [productName, setProductName] = useState("");
   const [productPrice, setProductPrice] = useState("");
@@ -400,16 +424,18 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!cityId) { toast.error("اختر المدينة"); return; }
+    if (!address.trim()) { toast.error("تفاصيل العنوان مطلوبة"); return; }
     setLoading(true);
     const itemsLine = cart.length > 0 ? cart.map((i) => `${i.name} × ${i.qty}`).join("، ") : "";
     const combined = [itemsLine, driverNotes && `📝 للمندوب: ${driverNotes}`].filter(Boolean).join("\n");
     const cityName = city?.name ?? "";
-    const finalAddress = `(${cityName})${address.trim() ? " " + address.trim() : ""}`;
-    const { error } = await supabase.from("orders").insert({
+    const finalAddress = `(${cityName}) ${address.trim()}`;
+    const { error } = await (supabase.from("orders") as unknown as { insert: (u: Record<string, unknown>) => Promise<{ error: { message: string } | null }> }).insert({
       restaurant_id: restaurantId,
       customer_name: name,
       customer_phone: phone,
       customer_address: finalAddress,
+      customer_location_url: customerLocationUrl.trim() || null,
       city_id: cityId || null,
       items_total: itemsTotal,
       delivery_price: Number(deliveryPrice),
@@ -420,6 +446,7 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
     toast.success("تم إنشاء الطلب");
     onDone();
   };
+
 
   return (
     <form onSubmit={submit} className="space-y-3">
@@ -435,7 +462,16 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
         </Select>
         <p className="text-[10px] text-muted-foreground">سيتم كتابة اسم المدينة بين قوسين قبل تفاصيل العنوان تلقائياً.</p>
       </div>
-      <div className="space-y-1.5"><Label>تفاصيل العنوان (اختياري)</Label><Textarea value={address} onChange={(e) => setAddress(e.target.value)} placeholder="مثال: شارع 9 - عمارة 12 - الدور الثالث" /></div>
+      <div className="space-y-1.5">
+        <Label>تفاصيل العنوان <span className="text-destructive">*</span></Label>
+        <Textarea value={address} onChange={(e) => setAddress(e.target.value)} required />
+      </div>
+      <div className="space-y-1.5">
+        <Label>رابط لوكيشن العميل (اختياري)</Label>
+        <Input value={customerLocationUrl} onChange={(e) => setCustomerLocationUrl(e.target.value)} placeholder="https://maps.google.com/..." dir="ltr" />
+        <p className="text-[10px] text-muted-foreground">إذا وجد سيظهر للمندوب كرابط للخرائط.</p>
+      </div>
+
 
 
       {products.length > 0 && (
@@ -497,9 +533,10 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
     <Card className="p-5 overflow-x-auto shadow-soft">
       <Table>
         <TableHeader><TableRow>
-          <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>المندوب</TableHead>
-          <TableHead>التوصيل</TableHead><TableHead>الإجمالي</TableHead><TableHead>الحالة</TableHead>
-          <TableHead>إلغاء</TableHead>
+          <TableHead>#</TableHead><TableHead>العميل</TableHead><TableHead>العنوان</TableHead>
+          <TableHead>المندوب</TableHead>
+          <TableHead>المنتجات</TableHead><TableHead>التوصيل</TableHead><TableHead>الإجمالي</TableHead>
+          <TableHead>الحالة</TableHead><TableHead>إلغاء</TableHead>
         </TableRow></TableHeader>
         <TableBody>
           {orders.map((o) => {
@@ -511,6 +548,7 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
                   <div className="font-medium">{o.customer_name}</div>
                   <div className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</div>
                 </TableCell>
+                <TableCell className="max-w-[220px] text-xs whitespace-pre-wrap">{o.customer_address}</TableCell>
                 <TableCell>
                   {info ? (
                     <div className="flex items-center gap-1.5">
@@ -523,6 +561,7 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
                     </div>
                   ) : <span className="text-xs text-muted-foreground">— لم يُعيَّن</span>}
                 </TableCell>
+                <TableCell>{Number(o.items_total ?? 0).toFixed(2)}</TableCell>
                 <TableCell className="text-accent">{Number(o.delivery_price).toFixed(2)}</TableCell>
                 <TableCell className="font-semibold">{Number(o.total).toFixed(2)}</TableCell>
                 <TableCell><Badge className={STATUS_COLORS[o.status]}>{STATUS_AR[o.status] ?? o.status}</Badge></TableCell>
@@ -530,6 +569,7 @@ function ActiveOrdersTable({ orders, driverInfo }: { orders: Order[]; driverInfo
               </TableRow>
             );
           })}
+
         </TableBody>
       </Table>
     </Card>
