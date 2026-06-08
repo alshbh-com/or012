@@ -173,11 +173,16 @@ function Body() {
     failed: orders.filter((o) => statusGroup(o.status) === "failed"),
   }), [orders]);
 
+  const isToday = (d: string) => new Date(d).toDateString() === new Date().toDateString();
   const totals = {
     active: grouped.active.length,
     delivered: grouped.done.length,
-    earnings: grouped.done.reduce((s, o) => s + Number(o.delivery_price) * (commission / 100), 0),
+    today: orders.filter((o) => isToday(o.created_at)).length,
+    totalDelivery: grouped.done.reduce((s, o) => s + Number(o.delivery_price ?? 0), 0),
+    officeCommission: grouped.done.reduce((s, o) => s + Number(o.delivery_price ?? 0) * (commission / 100), 0),
+    earnings: grouped.done.reduce((s, o) => s + Number(o.delivery_price ?? 0) * (1 - commission / 100), 0),
   };
+
 
   const navItems: NavItem[] = [
     { label: "اللوحة", icon: LayoutDashboard, onSelect: () => setTab("dashboard") },
