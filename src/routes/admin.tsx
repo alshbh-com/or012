@@ -1133,34 +1133,34 @@ function CloseResetTab() {
   useEffect(() => { refresh(); }, []);
 
   const exportClosingCsv = async (kind: "driver" | "restaurant") => {
-    // Per-entity breakdown for the closing sheet
     const { data: ords } = await supabase.from("orders").select("*").eq("status", "delivered")
       .eq(kind === "driver" ? "closed_for_driver" : "closed_for_restaurant", false);
     if (!ords || ords.length === 0) return [];
-    const idField = kind === "driver" ? "driver_id" : "restaurant_id";
-    const tbl = kind === "driver" ? "drivers" : "restaurants";
-    const ids = Array.from(new Set(ords.map((o) => o[idField as keyof typeof o]).filter(Boolean))) as string[];
-    const { data: ents } = await supabase.from(tbl).select("id, name:" + (kind === "driver" ? "phone" : "name") + ", user_id");
-    const { data: cities } = await supabase.from("cities").select("id, name");
-    const cityMap = new Map((cities ?? []).map((c) => [c.id as string, c.name as string]));
-    const uids = (ents ?? []).map((e) => (e as { user_id?: string }).user_id).filter(Boolean) as string[];
-    const { data: profs } = uids.length ? await supabase.from("profiles").select("id, full_name").in("id", uids) : { data: [] };
+    const [{ data: rs }, { data: ds }, { data: profs }, { data: cs }] = await Promise.all([
+      supabase.from("restaurants").select("id, name"),
+      supabase.from("drivers").select("id, user_id, phone"),
+      supabase.from("profiles").select("id, full_name"),
+      supabase.from("cities").select("id, name"),
+    ]);
+    const restMap = new Map((rs ?? []).map((r) => [r.id as string, r.name as string]));
     const profMap = new Map((profs ?? []).map((p) => [p.id as string, p.full_name as string]));
-    const entMap = new Map((ents ?? []).map((e) => {
-      const ee = e as { id: string; user_id?: string; name?: string };
-      return [ee.id, profMap.get(ee.user_id ?? "") || ee.name || ee.id.slice(0, 6)];
-    }));
-    void ids;
-    const rows = ords.map((o) => ({
+    const drvMap = new Map((ds ?? []).map((d) => [d.id as string, profMap.get(d.user_id as string) || (d.phone as string) || (d.id as string).slice(0, 6)]));
+    const cityMap = new Map((cs ?? []).map((c) => [c.id as string, c.name as string]));
+    const rows = (ords as Order[]).map((o) => ({
       رقم_الطلب: o.order_number,
-      التاريخ: new Date(o.created_at as string).toLocaleString(),
-      [kind === "driver" ? "المندوب" : "المطعم"]: entMap.get(o[idField as keyof typeof o] as string) ?? "—",
-      المدينة: cityMap.get(o.city_id as string) ?? "—",
+      التاريخ: new Date(o.created_at).toLocaleString(),
+      المطعم: restMap.get(o.restaurant_id) ?? "—",
+      المندوب: o.driver_id ? (drvMap.get(o.driver_id) ?? "—") : "—",
+      المدينة: cityMap.get(o.city_id ?? "") ?? "—",
+      العميل: o.customer_name,
       عدد_الطلبات: 1,
       سعر_التوصيل: Number(o.delivery_price ?? 0).toFixed(2),
+      الإجمالي: Number(o.total ?? 0).toFixed(2),
     }));
+    void kind;
     return rows;
   };
+
 
   const resetDrivers = async () => {
     setLoading("driver");
