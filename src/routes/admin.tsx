@@ -955,7 +955,7 @@ function OrdersTab({ initialDate = "" }: { initialDate?: string }) {
   const [to, setTo] = useState(initialDate);
   useEffect(() => { if (initialDate) { setFrom(initialDate); setTo(initialDate); } }, [initialDate]);
 
-  const [to, setTo] = useState("");
+  
   const [detailsId, setDetailsId] = useState<string | null>(null);
 
   const load = async () => {
