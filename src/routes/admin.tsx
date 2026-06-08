@@ -180,11 +180,10 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
     let q = supabase.from("orders").select("*").or("closed_for_restaurant.eq.false,closed_for_driver.eq.false").order("created_at", { ascending: false });
     if (kind === "active") {
       q = q.not("driver_id", "is", null).in("status", ["pending", "accepted", "preparing", "picked_up", "on_the_way", "on_hold"]);
-    if (kind === "active") {
-      q = q.not("driver_id", "is", null).in("status", ["pending", "accepted", "preparing", "picked_up", "on_the_way", "on_hold"]);
     } else {
       q = q.in("status", ["cancelled", "returned"]);
     }
+
 
     const { data } = await q;
     const list = (data ?? []) as Order[];
