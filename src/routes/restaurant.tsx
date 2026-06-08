@@ -116,9 +116,10 @@ function Body() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data: r } = await supabase.from("restaurants").select("id").eq("user_id", user.id).maybeSingle();
+      const { data: r } = await supabase.from("restaurants").select("id, is_offline").eq("user_id", user.id).maybeSingle();
       if (!r) return;
       setRestaurantId(r.id);
+      setIsOffline(!!(r as { is_offline?: boolean }).is_offline);
       loadOrders(r.id);
       loadProducts(r.id);
       const { data: c } = await supabase.from("cities").select("*").order("name");
@@ -126,6 +127,17 @@ function Body() {
       loadDrivers();
     })();
   }, [user]);
+
+  // Live updates to is_offline flag
+  useEffect(() => {
+    if (!restaurantId) return;
+    const ch = supabase.channel(`rest-info-${restaurantId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "restaurants", filter: `id=eq.${restaurantId}` },
+        (p) => setIsOffline(!!(p.new as { is_offline?: boolean }).is_offline))
+      .subscribe();
+    return () => { ch.unsubscribe(); };
+  }, [restaurantId]);
+
 
   useEffect(() => {
     if (!restaurantId) return;
