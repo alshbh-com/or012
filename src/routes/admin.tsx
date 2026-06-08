@@ -943,7 +943,7 @@ function UserActions({ userId, entity, cities, role, current, onChange }: {
   );
 }
 
-function OrdersTab() {
+function OrdersTab({ initialDate = "" }: { initialDate?: string }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -951,7 +951,10 @@ function OrdersTab() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [restaurantFilter, setRestaurantFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
-  const [from, setFrom] = useState("");
+  const [from, setFrom] = useState(initialDate);
+  const [to, setTo] = useState(initialDate);
+  useEffect(() => { if (initialDate) { setFrom(initialDate); setTo(initialDate); } }, [initialDate]);
+
   const [to, setTo] = useState("");
   const [detailsId, setDetailsId] = useState<string | null>(null);
 
