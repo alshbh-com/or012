@@ -368,20 +368,33 @@ function Body() {
             </div>
           </div>
 
-          <div className="grid gap-3 grid-cols-3">
-            <button onClick={() => setTab("orders")} className="text-right bg-gradient-primary p-4 rounded-xl border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">نشطة</div>
-              <div className="text-2xl font-extrabold">{totals.active}</div>
-            </button>
-            <Card className="bg-gradient-success p-4 border-0 shadow-pop">
+          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
+            <Card className="bg-gradient-success p-3 border-0 shadow-pop">
               <div className="text-[10px] uppercase opacity-90">تم التوصيل</div>
-              <div className="text-2xl font-extrabold">{totals.delivered}</div>
+              <div className="text-xl font-extrabold">{totals.delivered}</div>
             </Card>
-            <Card className="bg-gradient-warm p-4 border-0 shadow-pop">
+            <Card className="bg-gradient-cool p-3 border-0 shadow-pop">
+              <div className="text-[10px] uppercase opacity-90">طلبات اليوم</div>
+              <div className="text-xl font-extrabold">{totals.today}</div>
+            </Card>
+            <button onClick={() => setTab("orders")} className="text-right bg-gradient-primary p-3 rounded-xl border-0 shadow-pop">
+              <div className="text-[10px] uppercase opacity-90">النشطة</div>
+              <div className="text-xl font-extrabold">{totals.active}</div>
+            </button>
+            <Card className="bg-gradient-warm p-3 border-0 shadow-pop">
+              <div className="text-[10px] uppercase opacity-90">عمولة المكتب ({commission}%)</div>
+              <div className="text-xl font-extrabold">{totals.officeCommission.toFixed(2)}</div>
+            </Card>
+            <Card className="bg-gradient-success p-3 border-0 shadow-pop">
               <div className="text-[10px] uppercase opacity-90">أرباحي</div>
-              <div className="text-2xl font-extrabold">{totals.earnings.toFixed(2)}</div>
+              <div className="text-xl font-extrabold">{totals.earnings.toFixed(2)}</div>
+            </Card>
+            <Card className="bg-gradient-primary p-3 border-0 shadow-pop">
+              <div className="text-[10px] uppercase opacity-90">إجمالي التوصيل</div>
+              <div className="text-xl font-extrabold">{totals.totalDelivery.toFixed(2)}</div>
             </Card>
           </div>
+
 
           <div>
             <h2 className="mb-3 text-lg font-bold neon-text flex items-center gap-2">
