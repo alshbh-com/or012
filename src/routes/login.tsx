@@ -37,10 +37,8 @@ function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center">
-          <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-2xl font-extrabold">
-            O&amp;R
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight">O&amp;R</h1>
+          <img src="/logo.jpg" alt="إنجزني دليفري" className="mb-3 h-20 w-20 rounded-2xl object-cover shadow-pop" />
+          <h1 className="text-3xl font-bold tracking-tight">إنجزني دليفري</h1>
           <p className="mt-1 text-sm text-muted-foreground">منصة إدارة الدليفري والمطاعم</p>
         </div>
 

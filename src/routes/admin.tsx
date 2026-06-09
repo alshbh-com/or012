@@ -172,11 +172,14 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
   const [rests, setRests] = useState<Record<string, string>>({});
   const [drvInfo, setDrvInfo] = useState<Record<string, { name: string; phone: string | null }>>({});
   const load = async () => {
-    // Admin sees the order while EITHER side is still open
-    let q = supabase.from("orders").select("*").or("closed_for_restaurant.eq.false,closed_for_driver.eq.false").order("created_at", { ascending: false });
+    let q = supabase.from("orders").select("*").order("created_at", { ascending: false });
     if (kind === "active") {
-      q = q.not("driver_id", "is", null).in("status", ["pending", "accepted", "preparing", "picked_up", "on_the_way", "on_hold"]);
+      // Admin sees the active order while EITHER side is still open
+      q = q.or("closed_for_restaurant.eq.false,closed_for_driver.eq.false")
+        .not("driver_id", "is", null)
+        .in("status", ["pending", "accepted", "preparing", "picked_up", "on_the_way", "on_hold"]);
     } else {
+      // Trash: always show cancelled/returned, regardless of closed flags
       q = q.in("status", ["cancelled", "returned"]);
     }
 
@@ -317,7 +320,7 @@ function MapTab() {
   useEffect(() => {
     const load = async () => {
       const [{ data: ds }, { data: profs }, { data: ords }, { data: rs }] = await Promise.all([
-        supabase.from("drivers").select("id, user_id, phone, is_online, current_lat, current_lng"),
+        supabase.from("drivers").select("id, user_id, phone, is_online, is_active, current_lat, current_lng"),
         supabase.from("profiles").select("id, full_name"),
         supabase.from("orders").select("driver_id, status, customer_address, restaurant_id, created_at").order("created_at", { ascending: true }),
         supabase.from("restaurants").select("id, name"),
@@ -340,7 +343,7 @@ function MapTab() {
         }
       });
       setDrivers(
-        ds.filter((d) => d.current_lat != null && d.current_lng != null && d.is_online).map((d) => {
+        ds.filter((d) => d.current_lat != null && d.current_lng != null && d.is_online && d.is_active).map((d) => {
           const cnt = activeByDriver.get(d.id as string) ?? 0;
           const list = ordersByDriver.get(d.id as string) ?? [];
           return {
@@ -915,6 +918,9 @@ function OrdersTab({ initialDate = "" }: { initialDate?: string }) {
 
   const filtered = useMemo(() => {
     return orders.filter((o) => {
+      // Hide orders that are closed from both sides AND moved to trash (cancelled/returned)
+      const oo = o as Order & { closed_for_restaurant?: boolean; closed_for_driver?: boolean };
+      if (oo.closed_for_restaurant && oo.closed_for_driver && (o.status === "cancelled" || o.status === "returned")) return false;
       if (statusFilter !== "all" && o.status !== statusFilter) return false;
       if (restaurantFilter !== "all" && o.restaurant_id !== restaurantFilter) return false;
       if (from && new Date(o.created_at) < new Date(from)) return false;
