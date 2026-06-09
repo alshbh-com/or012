@@ -27,6 +27,7 @@ import { ComplaintsList } from "@/components/complaints";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 import { downloadCSV } from "@/lib/export";
 import { usePersistedTab } from "@/hooks/use-persisted-tab";
+import { useBackToDashboard } from "@/hooks/use-back-to-dashboard";
 
 export const Route = createFileRoute("/admin")({ component: AdminPage, ssr: false });
 
