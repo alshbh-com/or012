@@ -1260,15 +1260,16 @@ function DeleteClosedPanel() {
   const [count, setCount] = useState(0);
   const refresh = async () => {
     const { count: c } = await supabase.from("orders").select("*", { count: "exact", head: true })
-      .eq("closed_for_driver", true).eq("closed_for_restaurant", true);
+      .eq("closed_for_driver", true).eq("closed_for_restaurant", true).is("deleted_at", null);
     setCount(c ?? 0);
   };
   useEffect(() => { refresh(); }, []);
   const move = async () => {
     setLoading(true);
-    // Move to "trash" by marking as cancelled (which routes them to سلة الطلبات المحذوفة)
-    const { error } = await supabase.from("orders").update({ status: "cancelled" } as never)
-      .eq("closed_for_driver", true).eq("closed_for_restaurant", true).eq("status", "delivered");
+    // Mark trashed (preserve original status — delivered stays delivered, etc.)
+    const { error } = await (supabase.from("orders") as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: unknown) => { eq: (c: string, v: unknown) => { is: (c: string, v: null) => Promise<{ error: { message: string } | null }> } } } })
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("closed_for_driver", true).eq("closed_for_restaurant", true).is("deleted_at", null);
     setLoading(false);
     if (error) return toast.error(error.message);
     toast.success("تم نقل الطلبات المقفلة إلى سلة المحذوفات");
