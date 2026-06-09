@@ -1041,10 +1041,10 @@ function OrdersTab({ initialDate = "" }: { initialDate?: string }) {
                   <TableCell>{rest?.name ?? "—"}</TableCell>
                   <TableCell>{Number(o.total).toFixed(2)}</TableCell>
                   <TableCell>
-                    <Select value={o.status} onValueChange={(v) => updateStatus(o.id, v)}>
+                    <Select value={ADMIN_STATUSES.includes(o.status as typeof ADMIN_STATUSES[number]) ? o.status : "pending"} onValueChange={(v) => updateStatus(o.id, v)}>
                       <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_AR[s]}</SelectItem>)}
+                        {ADMIN_STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_AR[s]}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </TableCell>
