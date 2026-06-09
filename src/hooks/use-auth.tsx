@@ -77,8 +77,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
-      // Reset persisted tab selections so next sign-in lands on the dashboard.
-      ["admin:tab", "restaurant:tab", "driver:tab"].forEach((k) => window.localStorage.removeItem(k));
+      ["admin:tab", "restaurant:tab", "driver:tab"].forEach((k) => {
+        window.localStorage.removeItem(k);
+        window.sessionStorage.removeItem(k);
+      });
     } catch { /* ignore */ }
     await supabase.auth.signOut();
   };
