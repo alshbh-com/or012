@@ -430,9 +430,6 @@ function Body() {
           <ComplaintsList mode="driver" driverId={driverId} />
         </TabsContent>
 
-        <TabsContent value="chat" className="mt-0">
-          <ChatPanel />
-        </TabsContent>
       </Tabs>
     </DashboardLayout>
   );
