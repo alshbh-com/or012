@@ -179,13 +179,14 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
   const load = async () => {
     let q = supabase.from("orders").select("*").order("created_at", { ascending: false });
     if (kind === "active") {
-      // Admin sees the active order while EITHER side is still open
-      q = q.or("closed_for_restaurant.eq.false,closed_for_driver.eq.false")
+      // Admin sees the active assigned orders that are not yet trashed
+      q = q.is("deleted_at", null)
+        .or("closed_for_restaurant.eq.false,closed_for_driver.eq.false")
         .not("driver_id", "is", null)
         .in("status", ["pending", "accepted", "preparing", "picked_up", "on_the_way", "on_hold"]);
     } else {
-      // Trash: always show cancelled/returned, regardless of closed flags
-      q = q.in("status", ["cancelled", "returned"]);
+      // Trash: anything with deleted_at set (status preserved)
+      q = q.not("deleted_at", "is", null);
     }
 
 
@@ -225,9 +226,27 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
   const updateStatus = async (id: string, status: string) => {
     const updates: Record<string, unknown> = { status };
     if (status === "delivered") updates.delivered_at = new Date().toISOString();
+    // Cancelling → also move to trash so it disappears from restaurant/driver views
+    if (status === "cancelled") updates.deleted_at = new Date().toISOString();
     const { error } = await (supabase.from("orders") as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } }).update(updates).eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("تم التحديث");
+  };
+
+  const unassign = async (id: string) => {
+    if (!confirm("إلغاء تعيين هذا الطلب وإعادته إلى الطلبات غير المعينة؟")) return;
+    const { error } = await (supabase.from("orders") as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } })
+      .update({ driver_id: null, assigned_at: null, accepted_at: null, status: "pending" }).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("تم إلغاء التعيين");
+  };
+
+  const emptyTrash = async () => {
+    if (!confirm(`مسح نهائي لجميع الطلبات المحذوفة (${orders.length})؟ لا يمكن التراجع.`)) return;
+    const { error } = await supabase.from("orders").delete().not("deleted_at", "is", null);
+    if (error) return toast.error(error.message);
+    toast.success("تم مسح جميع الطلبات المحذوفة");
+    load();
   };
 
   return (
