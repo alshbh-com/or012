@@ -18,6 +18,7 @@ import { ComplaintsList } from "@/components/complaints";
 import { DriversMap, type MapDriver } from "@/components/drivers-map";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 import { usePersistedTab } from "@/hooks/use-persisted-tab";
+import { useBackToDashboard } from "@/hooks/use-back-to-dashboard";
 
 export const Route = createFileRoute("/driver")({ component: DriverPage, ssr: false });
 
