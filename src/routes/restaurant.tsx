@@ -399,7 +399,7 @@ function ProductsTab({ restaurantId, products, reload }: { restaurantId: string;
   );
 }
 
-function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId: string; cities: City[]; products: Product[]; onDone: () => void }) {
+function NewOrderForm({ restaurantId, cities, products, priceOverrides, onDone }: { restaurantId: string; cities: City[]; products: Product[]; priceOverrides: Record<string, number>; onDone: () => void }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -413,8 +413,14 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
   const [driverNotes, setDriverNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const city = cities.find((c) => c.id === cityId);
-  const deliveryPrice = city?.delivery_price ?? 0;
+  // If the restaurant has any price overrides defined, only show those cities;
+  // otherwise fall back to all cities at their default price.
+  const hasOverrides = Object.keys(priceOverrides).length > 0;
+  const availableCities = hasOverrides ? cities.filter((c) => priceOverrides[c.id] != null) : cities;
+  const priceFor = (c: City) => priceOverrides[c.id] != null ? priceOverrides[c.id] : Number(c.delivery_price);
+
+  const city = availableCities.find((c) => c.id === cityId);
+  const deliveryPrice = city ? priceFor(city) : 0;
   const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const itemsTotal = cartTotal > 0 ? cartTotal : Number(manualTotal) || 0;
   const total = itemsTotal + Number(deliveryPrice);
