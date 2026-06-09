@@ -80,8 +80,8 @@ export function DashboardLayout({ title, items, children, showBell = true }: Pro
               </div>
             </SheetContent>
           </Sheet>
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded bg-gradient-primary text-primary-foreground text-xs font-extrabold shadow-pop">R&amp;O</span>
-          <span className="font-semibold neon-text">R&amp;O</span>
+          <img src="/logo.jpg" alt="إنجزني" className="h-8 w-8 rounded object-cover shadow-pop" />
+          <span className="font-semibold neon-text">إنجزني دليفري</span>
           <span className="text-xs text-muted-foreground">· {title}</span>
         </div>
         <div className="flex items-center gap-1">
