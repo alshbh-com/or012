@@ -72,6 +72,7 @@ function Body() {
   const [restaurants, setRestaurants] = useState<Record<string, RestaurantInfo>>({});
   const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
   const [tab, setTab] = usePersistedTab("driver:tab", "dashboard");
+  useBackToDashboard(tab, () => setTab("dashboard"));
   const [knownIds] = useState(new Set<string>());
 
   useNotificationPermission();
