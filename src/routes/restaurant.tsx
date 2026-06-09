@@ -35,7 +35,8 @@ function CancelOrderButton({ orderId, createdAt, status, onDone }: { orderId: st
   const cancel = async () => {
     if (expired) return;
     if (!confirm("هل تريد إلغاء هذا الطلب؟")) return;
-    const { error } = await supabase.from("orders").update({ status: "cancelled" } as never).eq("id", orderId);
+    const { error } = await (supabase.from("orders") as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } })
+      .update({ status: "cancelled", deleted_at: new Date().toISOString() }).eq("id", orderId);
     if (error) return toast.error(error.message);
     toast.success("تم إلغاء الطلب");
     onDone?.();
