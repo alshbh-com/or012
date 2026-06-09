@@ -1029,6 +1029,212 @@ function OrdersTab({ initialDate = "" }: { initialDate?: string }) {
 }
 
 function CloseResetTab() {
+  const today = new Date().toISOString().slice(0, 10);
+  const monthAgo = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [driverNames, setDriverNames] = useState<Record<string, string>>({});
+  const [cities, setCities] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    (async () => {
+      const [{ data: rs }, { data: ds }, { data: cs }] = await Promise.all([
+        supabase.from("restaurants").select("*"),
+        supabase.from("drivers").select("*"),
+        supabase.from("cities").select("id, name"),
+      ]);
+      if (rs) setRestaurants(rs as Restaurant[]);
+      if (cs) {
+        const m: Record<string, string> = {};
+        cs.forEach((c) => { m[c.id as string] = c.name as string; });
+        setCities(m);
+      }
+      if (ds) {
+        const arr = ds as Driver[];
+        setDrivers(arr);
+        const uids = arr.map((d) => d.user_id).filter(Boolean);
+        if (uids.length) {
+          const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", uids);
+          const m: Record<string, string> = {};
+          arr.forEach((d) => {
+            const p = profs?.find((pp) => pp.id === d.user_id);
+            m[d.id] = (p?.full_name as string) || d.phone || d.id.slice(0, 6);
+          });
+          setDriverNames(m);
+        }
+      }
+    })();
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-5 shadow-soft">
+        <div className="text-lg font-bold neon-text mb-1">إغلاق وتصفير الحسابات</div>
+        <p className="text-xs text-muted-foreground">اختر مطعمًا أو مندوبًا وفترة زمنية، استعرض الإجمالي، ثم نزّل الشيت وقم بالتصفير. تختفي الطلبات عند الطرف المعني وتبقى عند المسؤول.</p>
+      </Card>
+
+      <ResetPanel
+        kind="restaurant"
+        title="تصفير المطاعم"
+        items={restaurants.map((r) => ({ id: r.id, name: r.name }))}
+        defaultFrom={monthAgo}
+        defaultTo={today}
+        cities={cities}
+      />
+
+      <ResetPanel
+        kind="driver"
+        title="تصفير المناديب"
+        items={drivers.map((d) => ({ id: d.id, name: driverNames[d.id] ?? d.phone ?? d.id.slice(0, 6) }))}
+        defaultFrom={monthAgo}
+        defaultTo={today}
+        cities={cities}
+      />
+
+      <DeleteClosedPanel />
+    </div>
+  );
+}
+
+function ResetPanel({ kind, title, items, defaultFrom, defaultTo, cities }: {
+  kind: "restaurant" | "driver";
+  title: string;
+  items: Array<{ id: string; name: string }>;
+  defaultFrom: string; defaultTo: string;
+  cities: Record<string, string>;
+}) {
+  const [targetId, setTargetId] = useState<string>("");
+  const [from, setFrom] = useState(defaultFrom);
+  const [to, setTo] = useState(defaultTo);
+  const [rows, setRows] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [commissionRate, setCommissionRate] = useState(0);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("app_settings").select("commission_rate").eq("id", 1).maybeSingle();
+      if (data) setCommissionRate(Number(data.commission_rate ?? 0));
+    })();
+  }, []);
+
+  const preview = async () => {
+    if (!targetId) { toast.error("اختر العنصر أولاً"); return; }
+    setLoading(true);
+    const col = kind === "restaurant" ? "restaurant_id" : "driver_id";
+    const closedCol = kind === "restaurant" ? "closed_for_restaurant" : "closed_for_driver";
+    const { data } = await supabase.from("orders").select("*")
+      .eq(col, targetId).eq("status", "delivered").eq(closedCol, false)
+      .gte("created_at", from + "T00:00:00").lte("created_at", to + "T23:59:59")
+      .order("created_at", { ascending: false });
+    setRows((data ?? []) as Order[]);
+    setLoading(false);
+  };
+
+  const totalDelivery = rows.reduce((s, r) => s + Number(r.delivery_price ?? 0), 0);
+  const officeCommission = kind === "driver" ? totalDelivery * (commissionRate / 100) : 0;
+  const itemsTotal = rows.reduce((s, r) => s + Number(r.items_total ?? 0), 0);
+
+  const confirmReset = async () => {
+    if (rows.length === 0) { toast.info("لا توجد طلبات للتصفير"); return; }
+    const targetName = items.find((i) => i.id === targetId)?.name ?? targetId;
+    const csv = rows.map((r) => ({
+      رقم_الطلب: r.order_number,
+      التاريخ: new Date(r.created_at).toLocaleString(),
+      المدينة: cities[r.city_id ?? ""] ?? "—",
+      العميل: r.customer_name,
+      العنوان: r.customer_address,
+      عدد_الطلبات: 1,
+      قيمة_المنتجات: Number(r.items_total ?? 0).toFixed(2),
+      سعر_التوصيل: Number(r.delivery_price ?? 0).toFixed(2),
+      الإجمالي: Number(r.total ?? 0).toFixed(2),
+    }));
+    downloadCSV(`closing-${kind}-${targetName}-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+    setResetting(true);
+    const closedCol = kind === "restaurant" ? "closed_for_restaurant" : "closed_for_driver";
+    const closedAtCol = kind === "restaurant" ? "closed_for_restaurant_at" : "closed_for_driver_at";
+    const ids = rows.map((r) => r.id);
+    const { error } = await (supabase.from("orders") as unknown as { update: (u: Record<string, unknown>) => { in: (c: string, v: string[]) => Promise<{ error: { message: string } | null }> } })
+      .update({ [closedCol]: true, [closedAtCol]: new Date().toISOString() }).in("id", ids);
+    setResetting(false);
+    if (error) return toast.error(error.message);
+    toast.success(`تم تصفير ${rows.length} طلب`);
+    setRows([]);
+  };
+
+  return (
+    <Card className="p-5 shadow-soft space-y-3">
+      <div className="text-lg font-bold">{title}</div>
+      <div className="grid gap-2 md:grid-cols-[1fr_140px_140px_auto]">
+        <Select value={targetId} onValueChange={(v) => { setTargetId(v); setRows([]); }}>
+          <SelectTrigger><SelectValue placeholder={kind === "restaurant" ? "اختر المطعم" : "اختر المندوب"} /></SelectTrigger>
+          <SelectContent>{items.map((i) => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}</SelectContent>
+        </Select>
+        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} dir="ltr" />
+        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} dir="ltr" />
+        <Button onClick={preview} disabled={loading || !targetId}>{loading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}عرض</Button>
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <div className="grid gap-2 sm:grid-cols-4">
+            <Card className="bg-gradient-primary p-3 border-0 text-white"><div className="text-[10px] opacity-90">عدد الأوردرات</div><div className="text-2xl font-extrabold">{rows.length}</div></Card>
+            <Card className="bg-gradient-cool p-3 border-0 text-white"><div className="text-[10px] opacity-90">أتعاب التوصيل</div><div className="text-2xl font-extrabold">{totalDelivery.toFixed(2)}</div></Card>
+            {kind === "driver" && <Card className="bg-gradient-warm p-3 border-0 text-white"><div className="text-[10px] opacity-90">عمولة المكتب ({commissionRate}%)</div><div className="text-2xl font-extrabold">{officeCommission.toFixed(2)}</div></Card>}
+            {kind === "restaurant" && <Card className="bg-gradient-success p-3 border-0 text-white"><div className="text-[10px] opacity-90">قيمة المنتجات</div><div className="text-2xl font-extrabold">{itemsTotal.toFixed(2)}</div></Card>}
+          </div>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" className="w-full" disabled={resetting}>
+                {resetting && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                تنزيل الشيتة وتصفير {rows.length} طلب
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader><AlertDialogTitle>تأكيد التصفير؟</AlertDialogTitle><AlertDialogDescription>سيتم تنزيل CSV ثم إخفاء الطلبات من {kind === "restaurant" ? "المطعم" : "المندوب"} المختار. تبقى عند المسؤول حتى المسح النهائي.</AlertDialogDescription></AlertDialogHeader>
+              <AlertDialogFooter><AlertDialogCancel>إلغاء</AlertDialogCancel><AlertDialogAction onClick={confirmReset}>تأكيد</AlertDialogAction></AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function DeleteClosedPanel() {
+  const [loading, setLoading] = useState(false);
+  const [count, setCount] = useState(0);
+  const refresh = async () => {
+    const { count: c } = await supabase.from("orders").select("*", { count: "exact", head: true })
+      .eq("closed_for_driver", true).eq("closed_for_restaurant", true);
+    setCount(c ?? 0);
+  };
+  useEffect(() => { refresh(); }, []);
+  const move = async () => {
+    setLoading(true);
+    // Move to "trash" by marking as cancelled (which routes them to سلة الطلبات المحذوفة)
+    const { error } = await supabase.from("orders").update({ status: "cancelled" } as never)
+      .eq("closed_for_driver", true).eq("closed_for_restaurant", true).eq("status", "delivered");
+    setLoading(false);
+    if (error) return toast.error(error.message);
+    toast.success("تم نقل الطلبات المقفلة إلى سلة المحذوفات");
+    refresh();
+  };
+  return (
+    <Card className="p-5 shadow-soft space-y-3 border-destructive/40">
+      <div className="text-lg font-bold text-destructive">مسح الطلبات المقفلة</div>
+      <p className="text-xs text-muted-foreground">عدد الطلبات المقفلة من الطرفين: <span className="font-bold">{count}</span></p>
+      <AlertDialog>
+        <AlertDialogTrigger asChild><Button variant="destructive" className="w-full" disabled={loading || count === 0}>{loading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}نقل إلى سلة المحذوفات</Button></AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>نقل الطلبات المقفلة؟</AlertDialogTitle><AlertDialogDescription>سيتم نقلها إلى سلة الطلبات المحذوفة (تظهر في تبويب «سلة الطلبات المحذوفة»).</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>إلغاء</AlertDialogCancel><AlertDialogAction onClick={move} className="bg-destructive text-destructive-foreground">تأكيد</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
   const [loading, setLoading] = useState<string | null>(null);
   const [stats, setStats] = useState({ drvOpen: 0, restOpen: 0, fullyClosed: 0 });
 
