@@ -101,10 +101,8 @@ function AdminContent() {
         <TabsContent value="old" className="mt-0"><ActiveOrAssignedTab kind="old" /></TabsContent>
         <TabsContent value="orders" className="mt-0"><OrdersTab initialDate={pendingDateFilter} /></TabsContent>
         <TabsContent value="drivers-status" className="mt-0"><DriversStatusTab /></TabsContent>
-        <TabsContent value="accounts" className="mt-0"><AccountsTab /></TabsContent>
         <TabsContent value="reports" className="mt-0"><CloseResetTab /></TabsContent>
         <TabsContent value="map" className="mt-0"><MapTab /></TabsContent>
-        <TabsContent value="chat" className="mt-0"><ChatPanel /></TabsContent>
         <TabsContent value="cities" className="mt-0"><CitiesTab /></TabsContent>
         <TabsContent value="restaurants" className="mt-0"><RestaurantsTab /></TabsContent>
         <TabsContent value="drivers" className="mt-0"><DriversTab /></TabsContent>
