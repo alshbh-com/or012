@@ -42,8 +42,8 @@ export function DashboardLayout({ title, items, children, showBell = true }: Pro
             <SheetContent side="right" className="w-72 p-0 bg-sidebar text-sidebar-foreground border-l border-sidebar-border">
               <SheetHeader className="border-b border-sidebar-border p-4">
                 <SheetTitle className="flex items-center gap-2 text-right">
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-primary text-primary-foreground font-extrabold shadow-pop neon-text">R&amp;O</span>
-                  <span className="neon-text">R&amp;O · {title}</span>
+                  <img src="/logo.jpg" alt="إنجزني" className="h-9 w-9 rounded-lg object-cover shadow-pop" />
+                  <span className="neon-text">إنجزني دليفري · {title}</span>
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-1 p-3">
@@ -80,8 +80,8 @@ export function DashboardLayout({ title, items, children, showBell = true }: Pro
               </div>
             </SheetContent>
           </Sheet>
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded bg-gradient-primary text-primary-foreground text-xs font-extrabold shadow-pop">R&amp;O</span>
-          <span className="font-semibold neon-text">R&amp;O</span>
+          <img src="/logo.jpg" alt="إنجزني" className="h-8 w-8 rounded object-cover shadow-pop" />
+          <span className="font-semibold neon-text">إنجزني دليفري</span>
           <span className="text-xs text-muted-foreground">· {title}</span>
         </div>
         <div className="flex items-center gap-1">

@@ -14,10 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
-import { ChatPanel } from "@/components/chat-panel";
 import { ComplaintsList } from "@/components/complaints";
 import { DriversMap, type MapDriver } from "@/components/drivers-map";
 import { useNotificationPermission, notify } from "@/lib/notifications";
+import { usePersistedTab } from "@/hooks/use-persisted-tab";
 
 export const Route = createFileRoute("/driver")({ component: DriverPage, ssr: false });
 
@@ -70,7 +70,7 @@ function Body() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [restaurants, setRestaurants] = useState<Record<string, RestaurantInfo>>({});
   const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
-  const [tab, setTab] = useState("dashboard");
+  const [tab, setTab] = usePersistedTab("driver:tab", "dashboard");
   const [knownIds] = useState(new Set<string>());
 
   useNotificationPermission();
@@ -186,7 +186,6 @@ function Body() {
     { label: "التقارير", icon: BarChart3, onSelect: () => setTab("reports") },
     { label: "موقعي", icon: MapIcon, onSelect: () => setTab("map") },
     { label: "الشكاوى", icon: AlertTriangle, onSelect: () => setTab("complaints") },
-    { label: "المحادثات", icon: MessagesSquare, onSelect: () => setTab("chat") },
   ];
 
   if (!driverId) {
@@ -254,6 +253,9 @@ function Body() {
                 <Store className="h-4 w-4 text-accent" />
                 <span className="font-bold neon-text-accent">{r?.name ?? "المطعم"}</span>
               </div>
+              {r?.address && (
+                <div className="text-xs text-foreground whitespace-pre-wrap">{r.address}</div>
+              )}
               <div className="flex flex-wrap gap-1.5">
                 {restMaps && (
                   <Button asChild size="sm" variant="outline" className="h-6 text-xs">
@@ -312,32 +314,22 @@ function Body() {
               </div>
             </div>
 
-            {/* Actions: 2-step flow */}
+            {/* Actions: single confirmation per step */}
             {isPending ? (
               <Button className="mt-2 w-full bg-gradient-primary shadow-pop h-10" onClick={() => acceptOrder(o.id)}>
                 <CheckCircle2 className="ml-2 h-4 w-4" /> قبول الطلب
               </Button>
             ) : (o.status === "accepted" || o.status === "preparing") ? (
-              <div className="mt-2 space-y-1.5">
-                <Button className="w-full bg-gradient-primary shadow-pop h-11 text-base font-bold" onClick={confirmPickup}>
-                  استلام الطلب
-                </Button>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <Button size="sm" className="bg-success hover:bg-success/90 text-white" onClick={confirmPickup}>تأكيد الاستلام</Button>
-                  <Button size="sm" variant="destructive" onClick={cancelPickup}>إلغاء</Button>
-                </div>
-              </div>
+              <Button className="mt-2 w-full bg-gradient-primary shadow-pop h-11 text-base font-bold" onClick={confirmPickup}>
+                استلام الطلب
+              </Button>
             ) : (o.status === "picked_up" || o.status === "on_the_way") ? (
-              <div className="mt-2 space-y-1.5">
-                <Button className="w-full bg-gradient-success shadow-pop h-11 text-base font-bold" onClick={confirmDeliver}>
-                  تسليم الطلب
-                </Button>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <Button size="sm" className="bg-success hover:bg-success/90 text-white" onClick={confirmDeliver}>تأكيد التسليم</Button>
-                  <Button size="sm" variant="destructive" onClick={cancelDeliver}>إلغاء (مرتجع)</Button>
-                </div>
-              </div>
+              <Button className="mt-2 w-full bg-gradient-success shadow-pop h-11 text-base font-bold" onClick={confirmDeliver}>
+                تسليم الطلب
+              </Button>
             ) : null}
+            {/* Silence unused cancel refs */}
+            <span className="hidden">{String(!!cancelPickup)}{String(!!cancelDeliver)}</span>
           </Card>
         );
       })}
@@ -364,30 +356,30 @@ function Body() {
             </div>
           </div>
 
-          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
-            <Card className="bg-gradient-success p-3 border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">تم التوصيل</div>
-              <div className="text-xl font-extrabold">{totals.delivered}</div>
+          <div className="grid gap-1.5 grid-cols-3">
+            <Card className="bg-gradient-success p-1.5 border-0 shadow-pop text-white">
+              <div className="text-[8px] uppercase opacity-90 leading-tight">تم التوصيل</div>
+              <div className="text-sm font-extrabold">{totals.delivered}</div>
             </Card>
-            <Card className="bg-gradient-cool p-3 border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">طلبات اليوم</div>
-              <div className="text-xl font-extrabold">{totals.today}</div>
+            <Card className="bg-gradient-cool p-1.5 border-0 shadow-pop text-white">
+              <div className="text-[8px] uppercase opacity-90 leading-tight">طلبات اليوم</div>
+              <div className="text-sm font-extrabold">{totals.today}</div>
             </Card>
-            <button onClick={() => setTab("orders")} className="text-right bg-gradient-primary p-3 rounded-xl border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">النشطة</div>
-              <div className="text-xl font-extrabold">{totals.active}</div>
+            <button onClick={() => setTab("orders")} className="text-right bg-gradient-primary p-1.5 rounded-xl border-0 shadow-pop text-white">
+              <div className="text-[8px] uppercase opacity-90 leading-tight">النشطة</div>
+              <div className="text-sm font-extrabold">{totals.active}</div>
             </button>
-            <Card className="bg-gradient-warm p-3 border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">عمولة المكتب ({commission}%)</div>
-              <div className="text-xl font-extrabold">{totals.officeCommission.toFixed(2)}</div>
+            <Card className="bg-gradient-warm p-1.5 border-0 shadow-pop text-white">
+              <div className="text-[8px] uppercase opacity-90 leading-tight">عمولة المكتب ({commission}%)</div>
+              <div className="text-sm font-extrabold">{totals.officeCommission.toFixed(2)}</div>
             </Card>
-            <Card className="bg-gradient-success p-3 border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">أرباحي</div>
-              <div className="text-xl font-extrabold">{totals.earnings.toFixed(2)}</div>
+            <Card className="bg-gradient-success p-1.5 border-0 shadow-pop text-white">
+              <div className="text-[8px] uppercase opacity-90 leading-tight">أرباحي</div>
+              <div className="text-sm font-extrabold">{totals.earnings.toFixed(2)}</div>
             </Card>
-            <Card className="bg-gradient-primary p-3 border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">إجمالي التوصيل</div>
-              <div className="text-xl font-extrabold">{totals.totalDelivery.toFixed(2)}</div>
+            <Card className="bg-gradient-primary p-1.5 border-0 shadow-pop text-white">
+              <div className="text-[8px] uppercase opacity-90 leading-tight">إجمالي التوصيل</div>
+              <div className="text-sm font-extrabold">{totals.totalDelivery.toFixed(2)}</div>
             </Card>
           </div>
 
@@ -438,9 +430,6 @@ function Body() {
           <ComplaintsList mode="driver" driverId={driverId} />
         </TabsContent>
 
-        <TabsContent value="chat" className="mt-0">
-          <ChatPanel />
-        </TabsContent>
       </Tabs>
     </DashboardLayout>
   );

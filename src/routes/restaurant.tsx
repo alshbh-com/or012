@@ -17,6 +17,7 @@ import { LayoutDashboard, Plus, Truck, Loader2, UtensilsCrossed, Trash2, X, Pack
 import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
 import { useNotificationPermission, notify } from "@/lib/notifications";
+import { usePersistedTab } from "@/hooks/use-persisted-tab";
 
 const CANCEL_WINDOW_MS = 3 * 60 * 1000;
 
@@ -81,7 +82,7 @@ function Body() {
   const [cities, setCities] = useState<City[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [driverInfo, setDriverInfo] = useState<Record<string, { name: string; phone: string | null; user_id: string }>>({});
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = usePersistedTab("restaurant:tab", "dashboard");
   const [open, setOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterCity, setFilterCity] = useState<string>("all");
