@@ -131,6 +131,12 @@ function Body() {
       loadProducts(r.id);
       const { data: c } = await supabase.from("cities").select("*").order("name");
       if (c) setCities(c);
+      // Per-restaurant price overrides
+      const { data: rcp } = await (supabase.from("restaurant_city_prices") as unknown as { select: (s: string) => { eq: (c: string, v: string) => Promise<{ data: Array<{ city_id: string; delivery_price: number }> | null }> } })
+        .select("city_id, delivery_price").eq("restaurant_id", r.id);
+      const overrides: Record<string, number> = {};
+      (rcp ?? []).forEach((x) => { overrides[x.city_id] = Number(x.delivery_price); });
+      setCityPriceOverrides(overrides);
       loadDrivers();
     })();
   }, [user]);
