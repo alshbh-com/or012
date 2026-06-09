@@ -42,8 +42,8 @@ export function DashboardLayout({ title, items, children, showBell = true }: Pro
             <SheetContent side="right" className="w-72 p-0 bg-sidebar text-sidebar-foreground border-l border-sidebar-border">
               <SheetHeader className="border-b border-sidebar-border p-4">
                 <SheetTitle className="flex items-center gap-2 text-right">
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-primary text-primary-foreground font-extrabold shadow-pop neon-text">R&amp;O</span>
-                  <span className="neon-text">R&amp;O · {title}</span>
+                  <img src="/logo.jpg" alt="إنجزني" className="h-9 w-9 rounded-lg object-cover shadow-pop" />
+                  <span className="neon-text">إنجزني دليفري · {title}</span>
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-1 p-3">
