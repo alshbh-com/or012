@@ -251,9 +251,16 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
 
   return (
     <Card className="p-4 shadow-soft">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-lg font-bold neon-text">{kind === "active" ? "الطلبات النشطة" : "سلة الطلبات المحذوفة"}</h2>
-        <Badge variant="outline">{orders.length}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{orders.length}</Badge>
+          {kind === "old" && orders.length > 0 && (
+            <Button variant="destructive" size="sm" onClick={emptyTrash}>
+              <Trash2 className="ml-1 h-4 w-4" />مسح جميع الطلبات المحذوفة
+            </Button>
+          )}
+        </div>
       </div>
       <div className="overflow-x-auto">
         <Table>
@@ -268,6 +275,7 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
             <TableHead>الإجمالي</TableHead>
             <TableHead>الحالة</TableHead>
             {kind === "active" && <TableHead>المؤقت</TableHead>}
+            {kind === "active" && <TableHead>إجراء</TableHead>}
           </TableRow></TableHeader>
           <TableBody>
             {orders.map((o) => {
@@ -299,12 +307,16 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
                   <TableCell>{Number(o.delivery_price).toFixed(2)}</TableCell>
                   <TableCell className="font-bold">{Number(o.total).toFixed(2)}</TableCell>
                   <TableCell>
-                    <Select value={o.status} onValueChange={(v) => updateStatus(o.id, v)}>
-                      <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_AR[s]}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    {kind === "active" ? (
+                      <Select value={ADMIN_STATUSES.includes(o.status as typeof ADMIN_STATUSES[number]) ? o.status : "pending"} onValueChange={(v) => updateStatus(o.id, v)}>
+                        <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {ADMIN_STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_AR[s]}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Badge variant="outline">{STATUS_AR[o.status] ?? o.status}</Badge>
+                    )}
                   </TableCell>
                   {kind === "active" && (
                     <TableCell>
@@ -312,10 +324,19 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
                       {o.status === "accepted" && pickupDeadline && <AdminCountdown deadline={pickupDeadline} label="استلام" />}
                     </TableCell>
                   )}
+                  {kind === "active" && (
+                    <TableCell>
+                      {o.driver_id && (
+                        <Button size="sm" variant="outline" onClick={() => unassign(o.id)} title="إلغاء التعيين">
+                          إلغاء التعيين
+                        </Button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}
-            {orders.length === 0 && <TableRow><TableCell colSpan={kind === "active" ? 10 : 9} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
+            {orders.length === 0 && <TableRow><TableCell colSpan={kind === "active" ? 11 : 9} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
           </TableBody>
         </Table>
       </div>
