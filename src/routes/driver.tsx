@@ -356,30 +356,30 @@ function Body() {
             </div>
           </div>
 
-          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
-            <Card className="bg-gradient-success p-3 border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">تم التوصيل</div>
-              <div className="text-xl font-extrabold">{totals.delivered}</div>
+          <div className="grid gap-1.5 grid-cols-3">
+            <Card className="bg-gradient-success p-1.5 border-0 shadow-pop text-white">
+              <div className="text-[8px] uppercase opacity-90 leading-tight">تم التوصيل</div>
+              <div className="text-sm font-extrabold">{totals.delivered}</div>
             </Card>
-            <Card className="bg-gradient-cool p-3 border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">طلبات اليوم</div>
-              <div className="text-xl font-extrabold">{totals.today}</div>
+            <Card className="bg-gradient-cool p-1.5 border-0 shadow-pop text-white">
+              <div className="text-[8px] uppercase opacity-90 leading-tight">طلبات اليوم</div>
+              <div className="text-sm font-extrabold">{totals.today}</div>
             </Card>
-            <button onClick={() => setTab("orders")} className="text-right bg-gradient-primary p-3 rounded-xl border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">النشطة</div>
-              <div className="text-xl font-extrabold">{totals.active}</div>
+            <button onClick={() => setTab("orders")} className="text-right bg-gradient-primary p-1.5 rounded-xl border-0 shadow-pop text-white">
+              <div className="text-[8px] uppercase opacity-90 leading-tight">النشطة</div>
+              <div className="text-sm font-extrabold">{totals.active}</div>
             </button>
-            <Card className="bg-gradient-warm p-3 border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">عمولة المكتب ({commission}%)</div>
-              <div className="text-xl font-extrabold">{totals.officeCommission.toFixed(2)}</div>
+            <Card className="bg-gradient-warm p-1.5 border-0 shadow-pop text-white">
+              <div className="text-[8px] uppercase opacity-90 leading-tight">عمولة المكتب ({commission}%)</div>
+              <div className="text-sm font-extrabold">{totals.officeCommission.toFixed(2)}</div>
             </Card>
-            <Card className="bg-gradient-success p-3 border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">أرباحي</div>
-              <div className="text-xl font-extrabold">{totals.earnings.toFixed(2)}</div>
+            <Card className="bg-gradient-success p-1.5 border-0 shadow-pop text-white">
+              <div className="text-[8px] uppercase opacity-90 leading-tight">أرباحي</div>
+              <div className="text-sm font-extrabold">{totals.earnings.toFixed(2)}</div>
             </Card>
-            <Card className="bg-gradient-primary p-3 border-0 shadow-pop">
-              <div className="text-[10px] uppercase opacity-90">إجمالي التوصيل</div>
-              <div className="text-xl font-extrabold">{totals.totalDelivery.toFixed(2)}</div>
+            <Card className="bg-gradient-primary p-1.5 border-0 shadow-pop text-white">
+              <div className="text-[8px] uppercase opacity-90 leading-tight">إجمالي التوصيل</div>
+              <div className="text-sm font-extrabold">{totals.totalDelivery.toFixed(2)}</div>
             </Card>
           </div>
 
