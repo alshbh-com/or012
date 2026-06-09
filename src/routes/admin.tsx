@@ -532,7 +532,6 @@ function DriversStatusTab() {
   );
 }
 
-function AccountsTab() {
   interface Totals { orders: number; delivered: number; cancelled: number; revenue: number; items: number; delivery: number }
   interface RestStat { id: string; name: string; count: number; items: number; total: number }
   interface DrvStat { id: string; name: string; count: number; fees: number; collected: number }
