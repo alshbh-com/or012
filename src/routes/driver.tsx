@@ -253,6 +253,9 @@ function Body() {
                 <Store className="h-4 w-4 text-accent" />
                 <span className="font-bold neon-text-accent">{r?.name ?? "المطعم"}</span>
               </div>
+              {r?.address && (
+                <div className="text-xs text-foreground whitespace-pre-wrap">{r.address}</div>
+              )}
               <div className="flex flex-wrap gap-1.5">
                 {restMaps && (
                   <Button asChild size="sm" variant="outline" className="h-6 text-xs">
