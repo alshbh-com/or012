@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 import { usePersistedTab } from "@/hooks/use-persisted-tab";
+import { useBackToDashboard } from "@/hooks/use-back-to-dashboard";
 
 const CANCEL_WINDOW_MS = 3 * 60 * 1000;
 
