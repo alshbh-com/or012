@@ -23,10 +23,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_AR, statusGroup } from "@/lib/i18n";
-import { ChatPanel } from "@/components/chat-panel";
 import { ComplaintsList } from "@/components/complaints";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 import { downloadCSV } from "@/lib/export";
+import { usePersistedTab } from "@/hooks/use-persisted-tab";
 
 export const Route = createFileRoute("/admin")({ component: AdminPage, ssr: false });
 
