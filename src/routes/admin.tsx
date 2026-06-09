@@ -46,6 +46,8 @@ interface Order {
 }
 
 const STATUSES = ["pending","accepted","preparing","picked_up","on_the_way","on_hold","delivered","cancelled","returned"] as const;
+// Admin status changer: 4 options only (per product requirement)
+const ADMIN_STATUSES = ["pending","picked_up","delivered","cancelled"] as const;
 
 function AdminPage() {
   const { user, loading: authLoading, roles } = useAuth();
