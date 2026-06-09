@@ -1524,3 +1524,62 @@ function CreateUserForm({ role, cities, onDone }: { role: "restaurant" | "driver
     </form>
   );
 }
+
+function RestaurantCityPricesDialog({ restaurantId, restaurantName, cities }: { restaurantId: string; restaurantName: string; cities: City[] }) {
+  const [open, setOpen] = useState(false);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await (supabase.from("restaurant_city_prices") as unknown as { select: (s: string) => { eq: (c: string, v: string) => Promise<{ data: Array<{ city_id: string; delivery_price: number }> | null }> } })
+      .select("city_id, delivery_price").eq("restaurant_id", restaurantId);
+    const map: Record<string, string> = {};
+    (data ?? []).forEach((r) => { map[r.city_id] = String(r.delivery_price); });
+    setOverrides(map);
+    setLoading(false);
+  };
+  useEffect(() => { if (open) load(); }, [open]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveOne = async (cityId: string) => {
+    const raw = overrides[cityId];
+    if (raw == null || raw === "") {
+      await (supabase.from("restaurant_city_prices") as unknown as { delete: () => { eq: (c: string, v: string) => { eq: (c: string, v: string) => Promise<unknown> } } })
+        .delete().eq("restaurant_id", restaurantId).eq("city_id", cityId);
+      toast.success("تم حذف السعر الخاص"); return;
+    }
+    const price = Number(raw);
+    if (Number.isNaN(price)) return toast.error("سعر غير صالح");
+    const { error } = await (supabase.from("restaurant_city_prices") as unknown as { upsert: (u: Record<string, unknown>, o: Record<string, unknown>) => Promise<{ error: { message: string } | null }> })
+      .upsert({ restaurant_id: restaurantId, city_id: cityId, delivery_price: price }, { onConflict: "restaurant_id,city_id" });
+    if (error) return toast.error(error.message);
+    toast.success("تم الحفظ");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" title="أسعار المدن"><MapPin className="ml-1 h-4 w-4" />أسعار المدن</Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>أسعار التوصيل لمطعم: {restaurantName}</DialogTitle></DialogHeader>
+        <p className="text-xs text-muted-foreground">حدّد سعر التوصيل لكل مدينة لهذا المطعم. اترك الخانة فارغة واحفظ لإلغاء السعر الخاص (يرجع لسعر المدينة الافتراضي).</p>
+        {loading ? <div className="py-4 text-center text-sm text-muted-foreground">…تحميل</div> : (
+          <div className="space-y-2">
+            {cities.map((c) => (
+              <div key={c.id} className="grid grid-cols-[1fr_120px_auto] gap-2 items-center">
+                <div className="text-sm">
+                  <div className="font-medium">{c.name}</div>
+                  <div className="text-[10px] text-muted-foreground">الافتراضي: {Number(c.delivery_price).toFixed(2)}</div>
+                </div>
+                <Input type="number" step="0.01" placeholder="—" value={overrides[c.id] ?? ""} onChange={(e) => setOverrides((p) => ({ ...p, [c.id]: e.target.value }))} dir="ltr" />
+                <Button size="sm" onClick={() => saveOne(c.id)}>حفظ</Button>
+              </div>
+            ))}
+            {cities.length === 0 && <div className="py-2 text-center text-sm text-muted-foreground">لا توجد مدن مسجّلة</div>}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
