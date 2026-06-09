@@ -85,15 +85,19 @@ function Body() {
   const [products, setProducts] = useState<Product[]>([]);
   const [driverInfo, setDriverInfo] = useState<Record<string, { name: string; phone: string | null; user_id: string }>>({});
   const [activeTab, setActiveTab] = usePersistedTab("restaurant:tab", "dashboard");
+  useBackToDashboard(activeTab, () => setActiveTab("dashboard"));
   const [open, setOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterCity, setFilterCity] = useState<string>("all");
   const [filterDate, setFilterDate] = useState<string>("");
+  const [cityPriceOverrides, setCityPriceOverrides] = useState<Record<string, number>>({});
 
   useNotificationPermission();
 
   const loadOrders = async (rid: string) => {
-    const { data } = await supabase.from("orders").select("*").eq("restaurant_id", rid).eq("closed_for_restaurant", false).order("created_at", { ascending: false });
+    // Hide orders that the restaurant cancelled / admin trashed / closed for restaurant
+    const { data } = await (supabase.from("orders") as unknown as { select: (s: string) => { eq: (c: string, v: string) => { eq: (c: string, v: boolean) => { is: (c: string, v: null) => { neq: (c: string, v: string) => { order: (c: string, o: { ascending: boolean }) => Promise<{ data: Order[] | null }> } } } } } })
+      .select("*").eq("restaurant_id", rid).eq("closed_for_restaurant", false).is("deleted_at", null).neq("status", "cancelled").order("created_at", { ascending: false });
     if (data) setOrders(data as Order[]);
   };
 
