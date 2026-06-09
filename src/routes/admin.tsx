@@ -60,6 +60,8 @@ function AdminPage() {
 function AdminContent() {
   useNotificationPermission();
   const [tab, setTab] = usePersistedTab("admin:tab", "dashboard");
+  const goDashboard = () => setTab("dashboard");
+  useBackToDashboard(tab, goDashboard);
   const [pendingDateFilter, setPendingDateFilter] = useState<string>("");
   useEffect(() => {
     const ch = supabase.channel("admin-new-orders")
