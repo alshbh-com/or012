@@ -477,7 +477,7 @@ function NewOrderForm({ restaurantId, cities, products, priceOverrides, onDone }
         <Label>المدينة <span className="text-destructive">*</span></Label>
         <Select value={cityId} onValueChange={setCityId}>
           <SelectTrigger><SelectValue placeholder="اختر المدينة (إجباري)" /></SelectTrigger>
-          <SelectContent>{cities.map((c) => <SelectItem key={c.id} value={c.id}>{c.name} — {Number(c.delivery_price).toFixed(2)}</SelectItem>)}</SelectContent>
+          <SelectContent>{availableCities.map((c) => <SelectItem key={c.id} value={c.id}>{c.name} — {Number(priceFor(c)).toFixed(2)}</SelectItem>)}</SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground">سيتم كتابة اسم المدينة بين قوسين قبل تفاصيل العنوان تلقائياً.</p>
       </div>
