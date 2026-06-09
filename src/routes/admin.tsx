@@ -340,7 +340,7 @@ function MapTab() {
         }
       });
       setDrivers(
-        ds.filter((d) => d.current_lat != null && d.current_lng != null).map((d) => {
+        ds.filter((d) => d.current_lat != null && d.current_lng != null && d.is_online).map((d) => {
           const cnt = activeByDriver.get(d.id as string) ?? 0;
           const list = ordersByDriver.get(d.id as string) ?? [];
           return {
