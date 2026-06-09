@@ -956,6 +956,7 @@ function OrdersTab({ initialDate = "" }: { initialDate?: string }) {
   const updateStatus = async (orderId: string, status: string) => {
     const updates: Record<string, unknown> = { status };
     if (status === "delivered") updates.delivered_at = new Date().toISOString();
+    if (status === "cancelled") updates.deleted_at = new Date().toISOString();
     const { error } = await (supabase.from("orders") as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } }).update(updates).eq("id", orderId);
     if (error) return toast.error(error.message);
     toast.success("تم تحديث الحالة");
@@ -963,9 +964,10 @@ function OrdersTab({ initialDate = "" }: { initialDate?: string }) {
 
   const filtered = useMemo(() => {
     return orders.filter((o) => {
-      // Hide orders that are closed from both sides AND moved to trash (cancelled/returned)
-      const oo = o as Order & { closed_for_restaurant?: boolean; closed_for_driver?: boolean };
-      if (oo.closed_for_restaurant && oo.closed_for_driver && (o.status === "cancelled" || o.status === "returned")) return false;
+      const oo = o as Order & { closed_for_restaurant?: boolean; closed_for_driver?: boolean; deleted_at?: string | null };
+      // Hide trashed orders from search; they live in the trash tab
+      if (oo.deleted_at) return false;
+      if (oo.closed_for_restaurant && oo.closed_for_driver) return false;
       if (statusFilter !== "all" && o.status !== statusFilter) return false;
       if (restaurantFilter !== "all" && o.restaurant_id !== restaurantFilter) return false;
       if (from && new Date(o.created_at) < new Date(from)) return false;
