@@ -212,7 +212,7 @@ function Body() {
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader><DialogTitle>إنشاء طلب جديد</DialogTitle></DialogHeader>
-                  <NewOrderForm restaurantId={restaurantId} cities={cities} products={products} onDone={() => { setOpen(false); loadOrders(restaurantId); }} />
+                  <NewOrderForm restaurantId={restaurantId} cities={cities} products={products} priceOverrides={cityPriceOverrides} onDone={() => { setOpen(false); loadOrders(restaurantId); }} />
                 </DialogContent>
               </Dialog>
               {isOffline && <span className="text-[11px] font-bold bg-destructive/20 text-destructive px-2 py-0.5 rounded-md">المكتب أوف لاين</span>}
