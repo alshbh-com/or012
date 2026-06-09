@@ -314,6 +314,7 @@ export type Database = {
           customer_name: string
           customer_phone: string
           daily_number: number | null
+          deleted_at: string | null
           delivered_at: string | null
           delivery_price: number
           driver_id: string | null
@@ -343,6 +344,7 @@ export type Database = {
           customer_name: string
           customer_phone: string
           daily_number?: number | null
+          deleted_at?: string | null
           delivered_at?: string | null
           delivery_price?: number
           driver_id?: string | null
@@ -372,6 +374,7 @@ export type Database = {
           customer_name?: string
           customer_phone?: string
           daily_number?: number | null
+          deleted_at?: string | null
           delivered_at?: string | null
           delivery_price?: number
           driver_id?: string | null
@@ -466,6 +469,48 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      restaurant_city_prices: {
+        Row: {
+          city_id: string
+          created_at: string
+          delivery_price: number
+          id: string
+          restaurant_id: string
+          updated_at: string
+        }
+        Insert: {
+          city_id: string
+          created_at?: string
+          delivery_price?: number
+          id?: string
+          restaurant_id: string
+          updated_at?: string
+        }
+        Update: {
+          city_id?: string
+          created_at?: string
+          delivery_price?: number
+          id?: string
+          restaurant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "restaurant_city_prices_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "cities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "restaurant_city_prices_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       restaurants: {
         Row: {

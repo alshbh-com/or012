@@ -75,7 +75,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
-  const signOut = async () => { await supabase.auth.signOut(); };
+  const signOut = async () => {
+    try {
+      ["admin:tab", "restaurant:tab", "driver:tab"].forEach((k) => {
+        window.localStorage.removeItem(k);
+        window.sessionStorage.removeItem(k);
+      });
+    } catch { /* ignore */ }
+    await supabase.auth.signOut();
+  };
 
   return (
     <AuthCtx.Provider value={{ user: session?.user ?? null, session, roles, loading, signIn, signOut }}>

@@ -18,6 +18,7 @@ import { ComplaintsList } from "@/components/complaints";
 import { DriversMap, type MapDriver } from "@/components/drivers-map";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 import { usePersistedTab } from "@/hooks/use-persisted-tab";
+import { useBackToDashboard } from "@/hooks/use-back-to-dashboard";
 
 export const Route = createFileRoute("/driver")({ component: DriverPage, ssr: false });
 
@@ -71,12 +72,14 @@ function Body() {
   const [restaurants, setRestaurants] = useState<Record<string, RestaurantInfo>>({});
   const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
   const [tab, setTab] = usePersistedTab("driver:tab", "dashboard");
+  useBackToDashboard(tab, () => setTab("dashboard"));
   const [knownIds] = useState(new Set<string>());
 
   useNotificationPermission();
 
   const loadOrders = async (did: string, isInitial = false) => {
-    const { data } = await supabase.from("orders").select("*").eq("driver_id", did).eq("closed_for_driver", false).order("created_at", { ascending: false });
+    const { data } = await (supabase.from("orders") as unknown as { select: (s: string) => { eq: (c: string, v: string) => { eq: (c: string, v: boolean) => { is: (c: string, v: null) => { neq: (c: string, v: string) => { order: (c: string, o: { ascending: boolean }) => Promise<{ data: Order[] | null }> } } } } } })
+      .select("*").eq("driver_id", did).eq("closed_for_driver", false).is("deleted_at", null).neq("status", "cancelled").order("created_at", { ascending: false });
     if (!data) return;
     if (!isInitial) {
       data.forEach((o) => {

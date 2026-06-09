@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { STATUS_AR, STATUS_COLORS, statusGroup } from "@/lib/i18n";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 import { usePersistedTab } from "@/hooks/use-persisted-tab";
+import { useBackToDashboard } from "@/hooks/use-back-to-dashboard";
 
 const CANCEL_WINDOW_MS = 3 * 60 * 1000;
 
@@ -34,7 +35,8 @@ function CancelOrderButton({ orderId, createdAt, status, onDone }: { orderId: st
   const cancel = async () => {
     if (expired) return;
     if (!confirm("هل تريد إلغاء هذا الطلب؟")) return;
-    const { error } = await supabase.from("orders").update({ status: "cancelled" } as never).eq("id", orderId);
+    const { error } = await (supabase.from("orders") as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } })
+      .update({ status: "cancelled", deleted_at: new Date().toISOString() }).eq("id", orderId);
     if (error) return toast.error(error.message);
     toast.success("تم إلغاء الطلب");
     onDone?.();
@@ -83,15 +85,19 @@ function Body() {
   const [products, setProducts] = useState<Product[]>([]);
   const [driverInfo, setDriverInfo] = useState<Record<string, { name: string; phone: string | null; user_id: string }>>({});
   const [activeTab, setActiveTab] = usePersistedTab("restaurant:tab", "dashboard");
+  useBackToDashboard(activeTab, () => setActiveTab("dashboard"));
   const [open, setOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterCity, setFilterCity] = useState<string>("all");
   const [filterDate, setFilterDate] = useState<string>("");
+  const [cityPriceOverrides, setCityPriceOverrides] = useState<Record<string, number>>({});
 
   useNotificationPermission();
 
   const loadOrders = async (rid: string) => {
-    const { data } = await supabase.from("orders").select("*").eq("restaurant_id", rid).eq("closed_for_restaurant", false).order("created_at", { ascending: false });
+    // Hide orders that the restaurant cancelled / admin trashed / closed for restaurant
+    const { data } = await (supabase.from("orders") as unknown as { select: (s: string) => { eq: (c: string, v: string) => { eq: (c: string, v: boolean) => { is: (c: string, v: null) => { neq: (c: string, v: string) => { order: (c: string, o: { ascending: boolean }) => Promise<{ data: Order[] | null }> } } } } } })
+      .select("*").eq("restaurant_id", rid).eq("closed_for_restaurant", false).is("deleted_at", null).neq("status", "cancelled").order("created_at", { ascending: false });
     if (data) setOrders(data as Order[]);
   };
 
@@ -125,6 +131,12 @@ function Body() {
       loadProducts(r.id);
       const { data: c } = await supabase.from("cities").select("*").order("name");
       if (c) setCities(c);
+      // Per-restaurant price overrides
+      const { data: rcp } = await (supabase.from("restaurant_city_prices") as unknown as { select: (s: string) => { eq: (c: string, v: string) => Promise<{ data: Array<{ city_id: string; delivery_price: number }> | null }> } })
+        .select("city_id, delivery_price").eq("restaurant_id", r.id);
+      const overrides: Record<string, number> = {};
+      (rcp ?? []).forEach((x) => { overrides[x.city_id] = Number(x.delivery_price); });
+      setCityPriceOverrides(overrides);
       loadDrivers();
     })();
   }, [user]);
@@ -200,7 +212,7 @@ function Body() {
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader><DialogTitle>إنشاء طلب جديد</DialogTitle></DialogHeader>
-                  <NewOrderForm restaurantId={restaurantId} cities={cities} products={products} onDone={() => { setOpen(false); loadOrders(restaurantId); }} />
+                  <NewOrderForm restaurantId={restaurantId} cities={cities} products={products} priceOverrides={cityPriceOverrides} onDone={() => { setOpen(false); loadOrders(restaurantId); }} />
                 </DialogContent>
               </Dialog>
               {isOffline && <span className="text-[11px] font-bold bg-destructive/20 text-destructive px-2 py-0.5 rounded-md">المكتب أوف لاين</span>}
@@ -387,7 +399,7 @@ function ProductsTab({ restaurantId, products, reload }: { restaurantId: string;
   );
 }
 
-function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId: string; cities: City[]; products: Product[]; onDone: () => void }) {
+function NewOrderForm({ restaurantId, cities, products, priceOverrides, onDone }: { restaurantId: string; cities: City[]; products: Product[]; priceOverrides: Record<string, number>; onDone: () => void }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -401,8 +413,14 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
   const [driverNotes, setDriverNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const city = cities.find((c) => c.id === cityId);
-  const deliveryPrice = city?.delivery_price ?? 0;
+  // If the restaurant has any price overrides defined, only show those cities;
+  // otherwise fall back to all cities at their default price.
+  const hasOverrides = Object.keys(priceOverrides).length > 0;
+  const availableCities = hasOverrides ? cities.filter((c) => priceOverrides[c.id] != null) : cities;
+  const priceFor = (c: City) => priceOverrides[c.id] != null ? priceOverrides[c.id] : Number(c.delivery_price);
+
+  const city = availableCities.find((c) => c.id === cityId);
+  const deliveryPrice = city ? priceFor(city) : 0;
   const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const itemsTotal = cartTotal > 0 ? cartTotal : Number(manualTotal) || 0;
   const total = itemsTotal + Number(deliveryPrice);
@@ -459,7 +477,7 @@ function NewOrderForm({ restaurantId, cities, products, onDone }: { restaurantId
         <Label>المدينة <span className="text-destructive">*</span></Label>
         <Select value={cityId} onValueChange={setCityId}>
           <SelectTrigger><SelectValue placeholder="اختر المدينة (إجباري)" /></SelectTrigger>
-          <SelectContent>{cities.map((c) => <SelectItem key={c.id} value={c.id}>{c.name} — {Number(c.delivery_price).toFixed(2)}</SelectItem>)}</SelectContent>
+          <SelectContent>{availableCities.map((c) => <SelectItem key={c.id} value={c.id}>{c.name} — {Number(priceFor(c)).toFixed(2)}</SelectItem>)}</SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground">سيتم كتابة اسم المدينة بين قوسين قبل تفاصيل العنوان تلقائياً.</p>
       </div>

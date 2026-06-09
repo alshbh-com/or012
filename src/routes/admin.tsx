@@ -27,6 +27,7 @@ import { ComplaintsList } from "@/components/complaints";
 import { useNotificationPermission, notify } from "@/lib/notifications";
 import { downloadCSV } from "@/lib/export";
 import { usePersistedTab } from "@/hooks/use-persisted-tab";
+import { useBackToDashboard } from "@/hooks/use-back-to-dashboard";
 
 export const Route = createFileRoute("/admin")({ component: AdminPage, ssr: false });
 
@@ -46,6 +47,8 @@ interface Order {
 }
 
 const STATUSES = ["pending","accepted","preparing","picked_up","on_the_way","on_hold","delivered","cancelled","returned"] as const;
+// Admin status changer: 4 options only (per product requirement)
+const ADMIN_STATUSES = ["pending","picked_up","delivered","cancelled"] as const;
 
 function AdminPage() {
   const { user, loading: authLoading, roles } = useAuth();
@@ -58,6 +61,8 @@ function AdminPage() {
 function AdminContent() {
   useNotificationPermission();
   const [tab, setTab] = usePersistedTab("admin:tab", "dashboard");
+  const goDashboard = () => setTab("dashboard");
+  useBackToDashboard(tab, goDashboard);
   const [pendingDateFilter, setPendingDateFilter] = useState<string>("");
   useEffect(() => {
     const ch = supabase.channel("admin-new-orders")
@@ -174,13 +179,14 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
   const load = async () => {
     let q = supabase.from("orders").select("*").order("created_at", { ascending: false });
     if (kind === "active") {
-      // Admin sees the active order while EITHER side is still open
-      q = q.or("closed_for_restaurant.eq.false,closed_for_driver.eq.false")
+      // Admin sees the active assigned orders that are not yet trashed
+      q = q.is("deleted_at", null)
+        .or("closed_for_restaurant.eq.false,closed_for_driver.eq.false")
         .not("driver_id", "is", null)
         .in("status", ["pending", "accepted", "preparing", "picked_up", "on_the_way", "on_hold"]);
     } else {
-      // Trash: always show cancelled/returned, regardless of closed flags
-      q = q.in("status", ["cancelled", "returned"]);
+      // Trash: anything with deleted_at set (status preserved)
+      q = q.not("deleted_at", "is", null);
     }
 
 
@@ -220,16 +226,41 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
   const updateStatus = async (id: string, status: string) => {
     const updates: Record<string, unknown> = { status };
     if (status === "delivered") updates.delivered_at = new Date().toISOString();
+    // Cancelling → also move to trash so it disappears from restaurant/driver views
+    if (status === "cancelled") updates.deleted_at = new Date().toISOString();
     const { error } = await (supabase.from("orders") as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } }).update(updates).eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("تم التحديث");
   };
 
+  const unassign = async (id: string) => {
+    if (!confirm("إلغاء تعيين هذا الطلب وإعادته إلى الطلبات غير المعينة؟")) return;
+    const { error } = await (supabase.from("orders") as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } })
+      .update({ driver_id: null, assigned_at: null, accepted_at: null, status: "pending" }).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("تم إلغاء التعيين");
+  };
+
+  const emptyTrash = async () => {
+    if (!confirm(`مسح نهائي لجميع الطلبات المحذوفة (${orders.length})؟ لا يمكن التراجع.`)) return;
+    const { error } = await supabase.from("orders").delete().not("deleted_at", "is", null);
+    if (error) return toast.error(error.message);
+    toast.success("تم مسح جميع الطلبات المحذوفة");
+    load();
+  };
+
   return (
     <Card className="p-4 shadow-soft">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-lg font-bold neon-text">{kind === "active" ? "الطلبات النشطة" : "سلة الطلبات المحذوفة"}</h2>
-        <Badge variant="outline">{orders.length}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{orders.length}</Badge>
+          {kind === "old" && orders.length > 0 && (
+            <Button variant="destructive" size="sm" onClick={emptyTrash}>
+              <Trash2 className="ml-1 h-4 w-4" />مسح جميع الطلبات المحذوفة
+            </Button>
+          )}
+        </div>
       </div>
       <div className="overflow-x-auto">
         <Table>
@@ -244,6 +275,7 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
             <TableHead>الإجمالي</TableHead>
             <TableHead>الحالة</TableHead>
             {kind === "active" && <TableHead>المؤقت</TableHead>}
+            {kind === "active" && <TableHead>إجراء</TableHead>}
           </TableRow></TableHeader>
           <TableBody>
             {orders.map((o) => {
@@ -275,12 +307,16 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
                   <TableCell>{Number(o.delivery_price).toFixed(2)}</TableCell>
                   <TableCell className="font-bold">{Number(o.total).toFixed(2)}</TableCell>
                   <TableCell>
-                    <Select value={o.status} onValueChange={(v) => updateStatus(o.id, v)}>
-                      <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_AR[s]}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    {kind === "active" ? (
+                      <Select value={ADMIN_STATUSES.includes(o.status as typeof ADMIN_STATUSES[number]) ? o.status : "pending"} onValueChange={(v) => updateStatus(o.id, v)}>
+                        <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {ADMIN_STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_AR[s]}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Badge variant="outline">{STATUS_AR[o.status] ?? o.status}</Badge>
+                    )}
                   </TableCell>
                   {kind === "active" && (
                     <TableCell>
@@ -288,10 +324,19 @@ function ActiveOrAssignedTab({ kind }: { kind: "active" | "old" }) {
                       {o.status === "accepted" && pickupDeadline && <AdminCountdown deadline={pickupDeadline} label="استلام" />}
                     </TableCell>
                   )}
+                  {kind === "active" && (
+                    <TableCell>
+                      {o.driver_id && (
+                        <Button size="sm" variant="outline" onClick={() => unassign(o.id)} title="إلغاء التعيين">
+                          إلغاء التعيين
+                        </Button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}
-            {orders.length === 0 && <TableRow><TableCell colSpan={kind === "active" ? 10 : 9} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
+            {orders.length === 0 && <TableRow><TableCell colSpan={kind === "active" ? 11 : 9} className="text-center text-sm text-muted-foreground">لا توجد طلبات</TableCell></TableRow>}
           </TableBody>
         </Table>
       </div>
@@ -673,7 +718,10 @@ function RestaurantsTab() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <UserActions userId={r.user_id} entity={{ table: "restaurants", id: r.id, label: r.name }} cities={cities} role="restaurant" current={{ name: r.name, phone: r.phone ?? "", city_id: r.city_id, address: r.address, location_url: r.location_url }} onChange={load} />
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <RestaurantCityPricesDialog restaurantId={r.id} restaurantName={r.name} cities={cities} />
+                    <UserActions userId={r.user_id} entity={{ table: "restaurants", id: r.id, label: r.name }} cities={cities} role="restaurant" current={{ name: r.name, phone: r.phone ?? "", city_id: r.city_id, address: r.address, location_url: r.location_url }} onChange={load} />
+                  </div>
                 </TableCell>
               </TableRow>
               );
@@ -911,6 +959,7 @@ function OrdersTab({ initialDate = "" }: { initialDate?: string }) {
   const updateStatus = async (orderId: string, status: string) => {
     const updates: Record<string, unknown> = { status };
     if (status === "delivered") updates.delivered_at = new Date().toISOString();
+    if (status === "cancelled") updates.deleted_at = new Date().toISOString();
     const { error } = await (supabase.from("orders") as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } }).update(updates).eq("id", orderId);
     if (error) return toast.error(error.message);
     toast.success("تم تحديث الحالة");
@@ -918,9 +967,10 @@ function OrdersTab({ initialDate = "" }: { initialDate?: string }) {
 
   const filtered = useMemo(() => {
     return orders.filter((o) => {
-      // Hide orders that are closed from both sides AND moved to trash (cancelled/returned)
-      const oo = o as Order & { closed_for_restaurant?: boolean; closed_for_driver?: boolean };
-      if (oo.closed_for_restaurant && oo.closed_for_driver && (o.status === "cancelled" || o.status === "returned")) return false;
+      const oo = o as Order & { closed_for_restaurant?: boolean; closed_for_driver?: boolean; deleted_at?: string | null };
+      // Hide trashed orders from search; they live in the trash tab
+      if (oo.deleted_at) return false;
+      if (oo.closed_for_restaurant && oo.closed_for_driver) return false;
       if (statusFilter !== "all" && o.status !== statusFilter) return false;
       if (restaurantFilter !== "all" && o.restaurant_id !== restaurantFilter) return false;
       if (from && new Date(o.created_at) < new Date(from)) return false;
@@ -994,10 +1044,10 @@ function OrdersTab({ initialDate = "" }: { initialDate?: string }) {
                   <TableCell>{rest?.name ?? "—"}</TableCell>
                   <TableCell>{Number(o.total).toFixed(2)}</TableCell>
                   <TableCell>
-                    <Select value={o.status} onValueChange={(v) => updateStatus(o.id, v)}>
+                    <Select value={ADMIN_STATUSES.includes(o.status as typeof ADMIN_STATUSES[number]) ? o.status : "pending"} onValueChange={(v) => updateStatus(o.id, v)}>
                       <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_AR[s]}</SelectItem>)}
+                        {ADMIN_STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_AR[s]}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </TableCell>
@@ -1213,15 +1263,16 @@ function DeleteClosedPanel() {
   const [count, setCount] = useState(0);
   const refresh = async () => {
     const { count: c } = await supabase.from("orders").select("*", { count: "exact", head: true })
-      .eq("closed_for_driver", true).eq("closed_for_restaurant", true);
+      .eq("closed_for_driver", true).eq("closed_for_restaurant", true).is("deleted_at", null);
     setCount(c ?? 0);
   };
   useEffect(() => { refresh(); }, []);
   const move = async () => {
     setLoading(true);
-    // Move to "trash" by marking as cancelled (which routes them to سلة الطلبات المحذوفة)
-    const { error } = await supabase.from("orders").update({ status: "cancelled" } as never)
-      .eq("closed_for_driver", true).eq("closed_for_restaurant", true).eq("status", "delivered");
+    // Mark trashed (preserve original status — delivered stays delivered, etc.)
+    const { error } = await (supabase.from("orders") as unknown as { update: (u: Record<string, unknown>) => { eq: (c: string, v: unknown) => { eq: (c: string, v: unknown) => { is: (c: string, v: null) => Promise<{ error: { message: string } | null }> } } } })
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("closed_for_driver", true).eq("closed_for_restaurant", true).is("deleted_at", null);
     setLoading(false);
     if (error) return toast.error(error.message);
     toast.success("تم نقل الطلبات المقفلة إلى سلة المحذوفات");
@@ -1471,5 +1522,64 @@ function CreateUserForm({ role, cities, onDone }: { role: "restaurant" | "driver
         <Button type="submit" disabled={loading}>{loading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إنشاء</Button>
       </DialogFooter>
     </form>
+  );
+}
+
+function RestaurantCityPricesDialog({ restaurantId, restaurantName, cities }: { restaurantId: string; restaurantName: string; cities: City[] }) {
+  const [open, setOpen] = useState(false);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await (supabase.from("restaurant_city_prices") as unknown as { select: (s: string) => { eq: (c: string, v: string) => Promise<{ data: Array<{ city_id: string; delivery_price: number }> | null }> } })
+      .select("city_id, delivery_price").eq("restaurant_id", restaurantId);
+    const map: Record<string, string> = {};
+    (data ?? []).forEach((r) => { map[r.city_id] = String(r.delivery_price); });
+    setOverrides(map);
+    setLoading(false);
+  };
+  useEffect(() => { if (open) load(); }, [open]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveOne = async (cityId: string) => {
+    const raw = overrides[cityId];
+    if (raw == null || raw === "") {
+      await (supabase.from("restaurant_city_prices") as unknown as { delete: () => { eq: (c: string, v: string) => { eq: (c: string, v: string) => Promise<unknown> } } })
+        .delete().eq("restaurant_id", restaurantId).eq("city_id", cityId);
+      toast.success("تم حذف السعر الخاص"); return;
+    }
+    const price = Number(raw);
+    if (Number.isNaN(price)) return toast.error("سعر غير صالح");
+    const { error } = await (supabase.from("restaurant_city_prices") as unknown as { upsert: (u: Record<string, unknown>, o: Record<string, unknown>) => Promise<{ error: { message: string } | null }> })
+      .upsert({ restaurant_id: restaurantId, city_id: cityId, delivery_price: price }, { onConflict: "restaurant_id,city_id" });
+    if (error) return toast.error(error.message);
+    toast.success("تم الحفظ");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" title="أسعار المدن"><MapPin className="ml-1 h-4 w-4" />أسعار المدن</Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>أسعار التوصيل لمطعم: {restaurantName}</DialogTitle></DialogHeader>
+        <p className="text-xs text-muted-foreground">حدّد سعر التوصيل لكل مدينة لهذا المطعم. اترك الخانة فارغة واحفظ لإلغاء السعر الخاص (يرجع لسعر المدينة الافتراضي).</p>
+        {loading ? <div className="py-4 text-center text-sm text-muted-foreground">…تحميل</div> : (
+          <div className="space-y-2">
+            {cities.map((c) => (
+              <div key={c.id} className="grid grid-cols-[1fr_120px_auto] gap-2 items-center">
+                <div className="text-sm">
+                  <div className="font-medium">{c.name}</div>
+                  <div className="text-[10px] text-muted-foreground">الافتراضي: {Number(c.delivery_price).toFixed(2)}</div>
+                </div>
+                <Input type="number" step="0.01" placeholder="—" value={overrides[c.id] ?? ""} onChange={(e) => setOverrides((p) => ({ ...p, [c.id]: e.target.value }))} dir="ltr" />
+                <Button size="sm" onClick={() => saveOne(c.id)}>حفظ</Button>
+              </div>
+            ))}
+            {cities.length === 0 && <div className="py-2 text-center text-sm text-muted-foreground">لا توجد مدن مسجّلة</div>}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
