@@ -314,32 +314,22 @@ function Body() {
               </div>
             </div>
 
-            {/* Actions: 2-step flow */}
+            {/* Actions: single confirmation per step */}
             {isPending ? (
               <Button className="mt-2 w-full bg-gradient-primary shadow-pop h-10" onClick={() => acceptOrder(o.id)}>
                 <CheckCircle2 className="ml-2 h-4 w-4" /> قبول الطلب
               </Button>
             ) : (o.status === "accepted" || o.status === "preparing") ? (
-              <div className="mt-2 space-y-1.5">
-                <Button className="w-full bg-gradient-primary shadow-pop h-11 text-base font-bold" onClick={confirmPickup}>
-                  استلام الطلب
-                </Button>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <Button size="sm" className="bg-success hover:bg-success/90 text-white" onClick={confirmPickup}>تأكيد الاستلام</Button>
-                  <Button size="sm" variant="destructive" onClick={cancelPickup}>إلغاء</Button>
-                </div>
-              </div>
+              <Button className="mt-2 w-full bg-gradient-primary shadow-pop h-11 text-base font-bold" onClick={confirmPickup}>
+                استلام الطلب
+              </Button>
             ) : (o.status === "picked_up" || o.status === "on_the_way") ? (
-              <div className="mt-2 space-y-1.5">
-                <Button className="w-full bg-gradient-success shadow-pop h-11 text-base font-bold" onClick={confirmDeliver}>
-                  تسليم الطلب
-                </Button>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <Button size="sm" className="bg-success hover:bg-success/90 text-white" onClick={confirmDeliver}>تأكيد التسليم</Button>
-                  <Button size="sm" variant="destructive" onClick={cancelDeliver}>إلغاء (مرتجع)</Button>
-                </div>
-              </div>
+              <Button className="mt-2 w-full bg-gradient-success shadow-pop h-11 text-base font-bold" onClick={confirmDeliver}>
+                تسليم الطلب
+              </Button>
             ) : null}
+            {/* Silence unused cancel refs */}
+            <span className="hidden">{String(!!cancelPickup)}{String(!!cancelDeliver)}</span>
           </Card>
         );
       })}
