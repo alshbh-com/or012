@@ -75,7 +75,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
-  const signOut = async () => { await supabase.auth.signOut(); };
+  const signOut = async () => {
+    try {
+      // Reset persisted tab selections so next sign-in lands on the dashboard.
+      ["admin:tab", "restaurant:tab", "driver:tab"].forEach((k) => window.localStorage.removeItem(k));
+    } catch { /* ignore */ }
+    await supabase.auth.signOut();
+  };
 
   return (
     <AuthCtx.Provider value={{ user: session?.user ?? null, session, roles, loading, signIn, signOut }}>
