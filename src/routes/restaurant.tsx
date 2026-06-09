@@ -82,7 +82,7 @@ function Body() {
   const [cities, setCities] = useState<City[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [driverInfo, setDriverInfo] = useState<Record<string, { name: string; phone: string | null; user_id: string }>>({});
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = usePersistedTab("restaurant:tab", "dashboard");
   const [open, setOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterCity, setFilterCity] = useState<string>("all");
