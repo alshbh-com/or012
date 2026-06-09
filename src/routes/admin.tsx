@@ -718,7 +718,10 @@ function RestaurantsTab() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <UserActions userId={r.user_id} entity={{ table: "restaurants", id: r.id, label: r.name }} cities={cities} role="restaurant" current={{ name: r.name, phone: r.phone ?? "", city_id: r.city_id, address: r.address, location_url: r.location_url }} onChange={load} />
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <RestaurantCityPricesDialog restaurantId={r.id} restaurantName={r.name} cities={cities} />
+                    <UserActions userId={r.user_id} entity={{ table: "restaurants", id: r.id, label: r.name }} cities={cities} role="restaurant" current={{ name: r.name, phone: r.phone ?? "", city_id: r.city_id, address: r.address, location_url: r.location_url }} onChange={load} />
+                  </div>
                 </TableCell>
               </TableRow>
               );
