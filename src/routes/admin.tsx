@@ -422,21 +422,24 @@ function UnassignedTab() {
       <div className="overflow-x-auto">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>#</TableHead><TableHead>المطعم</TableHead><TableHead>العميل</TableHead>
+            <TableHead>#</TableHead><TableHead>المطعم</TableHead>
             <TableHead>العنوان</TableHead>
             <TableHead>المنتجات</TableHead><TableHead>التوصيل</TableHead><TableHead>الإجمالي</TableHead>
             <TableHead>إسناد لمندوب</TableHead>
           </TableRow></TableHeader>
           <TableBody>
-            {orders.map((o) => (
+            {orders.map((o) => {
+              const m = (o.customer_address ?? "").match(/^\s*\(([^)]+)\)\s*([\s\S]*)$/);
+              const cityPart = m ? m[1].trim() : null;
+              const detailPart = m ? m[2].trim() : (o.customer_address ?? "");
+              return (
               <TableRow key={o.id}>
                 <TableCell><span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-gradient-warm px-2 text-xs font-bold text-white">{o.daily_number ?? "—"}</span></TableCell>
                 <TableCell>{restaurants.find((r) => r.id === o.restaurant_id)?.name ?? "—"}</TableCell>
-                <TableCell>
-                  <div className="font-medium">{o.customer_name}</div>
-                  <div className="text-xs text-muted-foreground" dir="ltr">{o.customer_phone}</div>
+                <TableCell className="max-w-[260px] text-xs">
+                  {cityPart && <div className="font-bold text-primary">({cityPart})</div>}
+                  <div className="whitespace-pre-wrap">{detailPart}</div>
                 </TableCell>
-                <TableCell className="max-w-[220px] truncate text-sm">{o.customer_address}</TableCell>
                 <TableCell>{Number(o.items_total ?? 0).toFixed(2)}</TableCell>
                 <TableCell className="text-accent">{Number(o.delivery_price ?? 0).toFixed(2)}</TableCell>
                 <TableCell className="font-semibold">{Number(o.total).toFixed(2)}</TableCell>
@@ -449,8 +452,9 @@ function UnassignedTab() {
                   </Select>
                 </TableCell>
               </TableRow>
-            ))}
-            {orders.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-sm text-muted-foreground">لا توجد طلبات في انتظار الإسناد</TableCell></TableRow>}
+              );
+            })}
+            {orders.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground">لا توجد طلبات في انتظار الإسناد</TableCell></TableRow>}
 
           </TableBody>
         </Table>
