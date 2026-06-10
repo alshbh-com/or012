@@ -58,7 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (lastUserId.current !== s.user.id) {
           lastUserId.current = s.user.id;
           try { osLogin(s.user.id); } catch { /* noop */ }
-          loadRoles(s.user.id);
+          setLoading(true);
+          loadRoles(s.user.id).finally(() => setLoading(false));
         }
       } else {
         lastUserId.current = null;
