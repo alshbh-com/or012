@@ -4,6 +4,8 @@
 import { isMedianApp, waitForMedianBridge } from "./median";
 
 const APP_ID = "13096a2e-b5f2-4d42-a446-02b83d93bbc5";
+const ALLOWED_WEB_ORIGINS = new Set(["https://or012.lovable.app"]);
+const ONESIGNAL_SCRIPT_SRC = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
 
 declare global {
   interface Window {
@@ -24,6 +26,21 @@ interface OneSignalApi {
 
 let initialized = false;
 
+function canUseWebOneSignal() {
+  if (typeof window === "undefined") return false;
+  return ALLOWED_WEB_ORIGINS.has(window.location.origin);
+}
+
+function ensureOneSignalScript() {
+  if (typeof document === "undefined") return;
+  const existing = document.querySelector<HTMLScriptElement>(`script[src="${ONESIGNAL_SCRIPT_SRC}"]`);
+  if (existing) return;
+  const script = document.createElement("script");
+  script.src = ONESIGNAL_SCRIPT_SRC;
+  script.defer = true;
+  document.head.appendChild(script);
+}
+
 export function initOneSignal() {
   if (typeof window === "undefined" || initialized) return;
   initialized = true;
@@ -35,7 +52,10 @@ export function initOneSignal() {
     return;
   }
 
+  if (!canUseWebOneSignal()) return;
+
   // Web browser path: init the Web SDK
+  ensureOneSignalScript();
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   window.OneSignalDeferred.push(async (OneSignal) => {
     await OneSignal.init({ appId: APP_ID, allowLocalhostAsSecureOrigin: true });
@@ -53,6 +73,8 @@ export function osLogin(userId: string) {
     return;
   }
 
+  if (!canUseWebOneSignal()) return;
+
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   window.OneSignalDeferred.push(async (OneSignal) => {
     try { await OneSignal.login(userId); } catch { /* ignore */ }
@@ -68,6 +90,8 @@ export function osLogout() {
     });
     return;
   }
+
+  if (!canUseWebOneSignal()) return;
 
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   window.OneSignalDeferred.push(async (OneSignal) => {
